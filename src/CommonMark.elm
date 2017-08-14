@@ -88,5 +88,9 @@ TODO: examples! And elm-doc-test!
 -}
 parseString : String -> Result Error Document
 parseString raw =
-    run thematicBreak raw
-        |> Result.map List.singleton
+    let
+        root =
+            oneOf [ thematicBreak ]
+                |> repeat zeroOrMore
+    in
+    run root raw
