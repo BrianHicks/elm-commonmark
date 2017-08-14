@@ -23,9 +23,9 @@ beginning of the block. So, helper parser!
 oneToThreeSpaces : Parser ()
 oneToThreeSpaces =
     oneOf
-        [ keyword "   "
-        , keyword "  "
-        , keyword " "
+        [ symbol "   "
+        , symbol "  "
+        , symbol " "
         , succeed ()
         ]
 
@@ -33,8 +33,8 @@ oneToThreeSpaces =
 eol : Parser ()
 eol =
     oneOf
-        [ keyword "\n"
-        , keyword "\x0D\n"
+        [ symbol "\n"
+        , symbol "\x0D\n"
         , end
         ]
 
@@ -46,28 +46,15 @@ thematicBreak =
         anyBreakChar c =
             c == '*' || c == '-' || c == '_'
 
-        initial : Parser Char
+        initial : Parser String
         initial =
             succeed identity
-                |= (keep (Exactly 1) anyBreakChar
-                        |> map
-                            (String.toList
-                                >> List.head
-                                -- we already know we have `Just x` so this is
-                                -- just to break out of the `Maybe`. That said,
-                                -- if this ever *does* happen we at least want
-                                -- an indication of what went wrong. So,
-                                -- frowning face!
-                                --
-                                -- https://github.com/elm-tools/parser/issues/19
-                                >> Maybe.withDefault '🙍'
-                            )
-                   )
+                |= keep (Exactly 1) anyBreakChar
                 |. ignore zeroOrMore whitespace
 
-        subsequent : Char -> Parser ()
-        subsequent c =
-            ignore (Exactly 1) ((==) c) |. ignore zeroOrMore whitespace
+        subsequent : String -> Parser ()
+        subsequent breakChar =
+            symbol breakChar |. ignore zeroOrMore whitespace
     in
     inContext "thematic break"
         (succeed ThematicBreak

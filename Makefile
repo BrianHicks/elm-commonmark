@@ -7,7 +7,7 @@ benchmarks/elm-package.json: elm-package.json
 benchmarks/elm-stuff: benchmarks/elm-package.json
 	cd benchmarks; elm package install --yes
 
-benchmarks/%.html: benchmarks/%.elm benchmarks/elm-stuff
+benchmarks/%.html: benchmarks/%.elm $(shell find src -type f -name '*.elm') benchmarks/elm-stuff
 	cd benchmarks; elm make --output $(shell basename $@) $(shell basename $<)
 
 .PHONY: clean
