@@ -1,5 +1,5 @@
 .PHONY: all
-all: test
+all: test documentation.json
 
 elm-stuff: elm-package.json
 	elm package install --yes
