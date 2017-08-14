@@ -12,6 +12,8 @@ module CommonMark exposing (Block(..), Document, parseString)
 -}
 
 import Parser exposing (..)
+import Parser.LowLevel as LowLevel
+import String.Extra
 
 
 {-| a document is just a list of Block-level elements
@@ -25,12 +27,17 @@ or more block- or inline-level elements.
 -}
 type Block
     = ThematicBreak
-    | TODO
+    | Heading Int String
 
 
 whitespace : Char -> Bool
 whitespace c =
     c == ' ' || c == '\t'
+
+
+newlineChar : Char -> Bool
+newlineChar c =
+    c == '\n' || c == '\x0D'
 
 
 {-| Most of the CommonMark block elements allow one to three spaces before the
@@ -58,26 +65,90 @@ eol =
 thematicBreak : Parser Block
 thematicBreak =
     let
-        anyBreakChar : Char -> Bool
-        anyBreakChar c =
-            c == '*' || c == '-' || c == '_'
-
-        initial : Parser String
-        initial =
-            succeed identity
-                |= keep (Exactly 1) anyBreakChar
+        single : Char -> Parser ()
+        single breakChar =
+            ignore (Exactly 1) ((==) breakChar)
                 |. ignore zeroOrMore whitespace
 
-        subsequent : String -> Parser ()
-        subsequent breakChar =
-            symbol breakChar |. ignore zeroOrMore whitespace
+        lineOf : Char -> Parser ()
+        lineOf breakChar =
+            delayedCommit
+                (oneToThreeSpaces |. single breakChar)
+                (repeat (AtLeast 2) (single breakChar) |> map (always ()))
     in
-    inContext "thematic break"
-        (succeed ThematicBreak
-            |. oneToThreeSpaces
-            |. (initial |> andThen (\c -> repeat (AtLeast 2) (subsequent c)))
+    inContext "thematic break" <|
+        succeed ThematicBreak
+            |. oneOf
+                [ lineOf '*'
+                , lineOf '-'
+                , lineOf '_'
+                ]
             |. eol
-        )
+
+
+atxHeading : Parser Block
+atxHeading =
+    let
+        level : Parser Int
+        level =
+            let
+                count =
+                    keep (AtLeast 1) ((==) '#')
+                        |> map String.length
+
+                validate n =
+                    if n <= 6 then
+                        succeed n
+                    else
+                        fail <| "cannot have a header level higher than 6, got " ++ toString n
+            in
+            count |> andThen validate
+
+        trailers : Parser String
+        trailers =
+            oneOf
+                [ -- the closing header of `## foo ##`
+                  delayedCommit
+                    (ignore oneOrMore whitespace
+                        |. ignore oneOrMore ((==) '#')
+                        |. ignore zeroOrMore whitespace
+                    )
+                    (oneOf
+                        [ peek "\n"
+                        , peek "\x0D\n"
+                        , end
+                        ]
+                    )
+                    |> map (\_ -> "")
+
+                -- the trailing whitespace of `## foo  `
+                , ignore zeroOrMore whitespace
+                    |> source
+                ]
+
+        wordsWithoutClosingSequence : Parser String
+        wordsWithoutClosingSequence =
+            map2 (++)
+                (keep oneOrMore
+                    (\c -> not (whitespace c) && not (newlineChar c))
+                    |> map (String.Extra.replace "\\#" "#")
+                )
+                trailers
+                |> repeat oneOrMore
+                |> map (String.concat >> String.trim)
+                |> inContext "in the header contents"
+    in
+    inContext "in an ATX heading" <|
+        delayedCommitMap Heading
+            (succeed identity
+                |. oneToThreeSpaces
+                |= level
+            )
+            (succeed identity
+                |. ignore oneOrMore ((==) ' ')
+                |= wordsWithoutClosingSequence
+                |. eol
+            )
 
 
 {-| parse a string into CommonMark AST. You can format this however you like;
@@ -90,7 +161,29 @@ parseString : String -> Result Error Document
 parseString raw =
     let
         root =
-            oneOf [ thematicBreak ]
+            oneOf
+                [ atxHeading
+                , thematicBreak
+                ]
                 |> repeat zeroOrMore
+                |> inContext "a Markdown document"
     in
     run root raw
+
+
+
+-- UTILS
+
+
+peek : String -> Parser ()
+peek stuff =
+    succeed (,)
+        |= LowLevel.getOffset
+        |= LowLevel.getSource
+        |> andThen
+            (\( pos, src ) ->
+                if String.slice pos (pos + String.length stuff) src == stuff then
+                    succeed ()
+                else
+                    fail "peek failed"
+            )

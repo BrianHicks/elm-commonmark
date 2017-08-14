@@ -24,18 +24,49 @@ group description tester candidates =
             candidates
 
 
+testName : String -> String
+testName raw =
+    raw |> replace " " "·"
+
+
+testParsed : Document -> String -> Test
+testParsed document raw =
+    test (testName raw) <|
+        \_ ->
+            Expect.equal
+                (Ok document)
+                (parseString raw)
+
+
+testError : String -> Test
+testError badRaw =
+    -- TODO: most things that use this should actually be paragraphs. I'd like
+    -- to get rid of this eventually!
+    test (testName badRaw) <|
+        \_ ->
+            case parseString badRaw of
+                Err _ ->
+                    Expect.pass
+
+                Ok [] ->
+                    Expect.pass
+
+                Ok stuff ->
+                    Expect.fail <| "expected to fail, but got `" ++ toString stuff ++ "`. This probably means you should use `testParsed` instead!"
+
+
 thematicBreak : Test
 thematicBreak =
     let
         isOnlyThematicBreak : String -> () -> Expectation
-        isOnlyThematicBreak raw unitToSatisfyTestType =
+        isOnlyThematicBreak raw _ =
             -- reversed because the ordering is built for pipelines
             Expect.equal
                 (Ok [ ThematicBreak ])
                 (parseString raw)
 
         isNotThematicBreak : String -> () -> Expectation
-        isNotThematicBreak raw unitToSatisfyTestType =
+        isNotThematicBreak raw _ =
             case parseString raw |> Result.map List.head of
                 Ok (Just ThematicBreak) ->
                     Expect.fail "got a thematic break"
@@ -52,7 +83,7 @@ thematicBreak =
                     Expect.pass
 
         containsThematicBreak : String -> () -> Expectation
-        containsThematicBreak raw unitToSatisfyTestType =
+        containsThematicBreak raw _ =
             -- TODO: revisit this once other block-level elements are
             -- implemented. Right now it's an error since only thematic breaks
             -- are implemented.
@@ -107,4 +138,83 @@ thematicBreak =
         , group "if you want a thematic break in a list item, use a different bullet"
             containsThematicBreak
             [ "- Foo\n- * * *" ]
+        ]
+
+
+atxHeading : Test
+atxHeading =
+    let
+        isNotAtxHeading : String -> () -> Expectation
+        isNotAtxHeading raw _ =
+            case parseString raw of
+                Ok [ Heading _ _ ] ->
+                    Expect.fail "got a heading"
+
+                Ok _ ->
+                    Expect.pass
+
+                Err _ ->
+                    -- TODO: revisit this when the parser is more fully
+                    -- implemented. Should it fail with the error?
+                    Expect.pass
+    in
+    describe "ATX headings"
+        [ describe "simple headings"
+            [ testParsed [ Heading 1 "foo" ] "# foo"
+            , testParsed [ Heading 2 "foo" ] "## foo"
+            , testParsed [ Heading 3 "foo" ] "### foo"
+            , testParsed [ Heading 4 "foo" ] "#### foo"
+            , testParsed [ Heading 5 "foo" ] "##### foo"
+            , testParsed [ Heading 6 "foo" ] "###### foo"
+            ]
+        , describe "more than 6 characters is not a heading"
+            [ testError "####### foo" ]
+        , describe "at least one space is required between the # characters and the heading's contents"
+            [ testError "#5 bolt"
+            , testError "#hashtag"
+            ]
+        , describe "not a heading if the first # is escaped"
+            [ testError "\\## foo" ]
+
+        -- TODO: fix this up when I implement inlines
+        , describe "contents are parsed as inlines"
+            [ testParsed [ Heading 1 "foo *bar* \\*baz\\*" ] "# foo *bar* \\*baz\\*" ]
+        , describe "leading and trailing blanks are ignored in parsing inline content"
+            [ testParsed [ Heading 1 "foo" ] "#                  foo                     " ]
+        , describe "one to three spaces indentation are allowed"
+            [ testParsed [ Heading 3 "foo" ] " ### foo"
+            , testParsed [ Heading 2 "foo" ] "  ## foo"
+            , testParsed [ Heading 1 "foo" ] "   # foo"
+            ]
+        , describe "four spaces are too much"
+            [ testError "    # foo"
+            , testError "foo\n    # bar"
+            ]
+        , describe "a closing sequence of # characters is optional"
+            [ testParsed [ Heading 2 "foo" ] "## foo ##"
+            , testParsed [ Heading 3 "bar" ] "  ###   bar    ###"
+            , describe "it need not be the same length as the opening sequence"
+                [ testParsed [ Heading 1 "foo" ] "# foo ##################################"
+                , testParsed [ Heading 5 "foo" ] "##### foo ##"
+                ]
+            , describe "spaces are allowed after the closing sequence"
+                [ testParsed [ Heading 3 "foo" ] "### foo ###     " ]
+            , describe "a sequence of # characters with anything but spaces following it is not a closing sequence, but counts as part of the contents of the heading"
+                [ testParsed [ Heading 3 "foo ### b" ] "### foo ### b" ]
+            , describe "the closing sequence must be preceded by a space"
+                [ testParsed [ Heading 1 "foo#" ] "# foo#" ]
+            , describe "backslash-escaped # characters do not count as part of the closing sequence"
+                [ testParsed [ Heading 3 "foo ###" ] "### foo \\###"
+                , testParsed [ Heading 2 "foo ###" ] "## foo #\\##"
+                , testParsed [ Heading 1 "foo #" ] "# foo \\#"
+                ]
+            ]
+        , describe "don't need to be separated from surrounding context by blank lines"
+            [ testParsed
+                [ ThematicBreak
+                , Heading 2 "foo"
+                , ThematicBreak
+                ]
+                "****\n## foo\n****"
+            ]
         ]
