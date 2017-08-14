@@ -1,4 +1,4 @@
-# Elm Commonmark
+# CommonMark
 
 An implementation of the [CommonMark spec](http://commonmark.org/) in [Elm](http://elm-lang.org/).
 
