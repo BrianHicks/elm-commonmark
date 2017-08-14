@@ -1,12 +1,28 @@
-module CommonMark exposing (..)
+module CommonMark exposing (Block(..), Document, parseString)
+
+{-| Parse [CommonMark](http://commonmark.org/)-formatted Markdown files.
+
+@docs parseString
+
+
+## Block-level Elements
+
+@docs Document, Block
+
+-}
 
 import Parser exposing (..)
 
 
+{-| a document is just a list of Block-level elements
+-}
 type alias Document =
     List Block
 
 
+{-| Markdown is basically a list of block-level elements which all contain one
+or more block- or inline-level elements.
+-}
 type Block
     = ThematicBreak
     | TODO
@@ -64,6 +80,12 @@ thematicBreak =
         )
 
 
+{-| parse a string into CommonMark AST. You can format this however you like;
+it's just a list of block-level elements.
+
+TODO: examples! And elm-doc-test!
+
+-}
 parseString : String -> Result Error Document
 parseString raw =
     run thematicBreak raw

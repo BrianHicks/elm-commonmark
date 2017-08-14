@@ -1,4 +1,4 @@
-# CommonMark
+# CommonMark [![Build Status](https://travis-ci.org/BrianHicks/elm-commonmark.svg?branch=master)](https://travis-ci.org/BrianHicks/elm-commonmark)
 
 An implementation of the [CommonMark spec](http://commonmark.org/) in [Elm](http://elm-lang.org/).
 
