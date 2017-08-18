@@ -293,4 +293,11 @@ indentedCodeBlocks =
                 [ CodeBlock "<a/>\n*hi*\n\n- one" ]
                 "    <a/>\n    *hi*\n\n    - one"
             ]
+        , describe "blank/empty/low space lines just extend the code block"
+            [ example
+                [ CodeBlock "chunk1\n\nchunk2\n\n\n\nchunk3" ]
+                "    chunk1\n\n    chunk2\n  \n \n \n    chunk3"
+            , describe "any initial spaces beyond four will be included in the content, even in interior blank lines"
+                [ example [ CodeBlock "chunk1\n  \n  chunk2" ] "    chunk1\n      \n      chunk2" ]
+            ]
         ]

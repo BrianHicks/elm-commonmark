@@ -12,7 +12,9 @@ type Block
     | Heading Int (Maybe String)
     | Paragraph String
     | IndentedCodeBlock String
-    | HardLineBreak
+      -- wait, what? Why Does a blank line have a string attached? The answer:
+      -- lines consisting only of whitespace.
+    | BlankLine String
 
 
 type Status
@@ -69,15 +71,15 @@ extend existing new =
             [ Node Open (IndentedCodeBlock <| code ++ "\n" ++ moreCode) ]
 
         -- line breaks don't close indented blocks
-        ( Just (Node Open (IndentedCodeBlock code)), Node Closed HardLineBreak ) ->
+        ( Just (Node Open (IndentedCodeBlock code)), Node Closed (BlankLine _) ) ->
             [ Node Open (IndentedCodeBlock <| code ++ "\n") ]
 
         {-
-           hard line breaks
-           ----------------
+           blank lines
+           -----------
         -}
-        -- hard lines breaks close everything else
-        ( Just (Node Open block), Node Closed HardLineBreak ) ->
+        -- blank lines breaks close everything else
+        ( Just (Node Open block), Node Closed (BlankLine _) ) ->
             [ Node Closed block ]
 
         {-
@@ -128,10 +130,8 @@ parseLine line document =
                 , atxHeading
                 , thematicBreak
                 , indentedCodeBlock
-                , if line == "" then
-                    succeed (Node Closed HardLineBreak)
-                  else
-                    succeed <| Node Open <| Paragraph <| String.trim line
+                , blankLine
+                , succeed <| Node Open <| Paragraph <| String.trim line
                 ]
 
         closeOrExtendHead : List Node -> Node -> List Node
@@ -166,6 +166,21 @@ oneToThreeSpaces =
         ]
 
 
+blankLine : Parser Node
+blankLine =
+    inContext "a blank line" <|
+        neverCommit
+            (succeed (Node Closed << BlankLine)
+                |= keep zeroOrMore whitespace
+                |. end
+            )
+
+
+neverCommit : Parser a -> Parser a
+neverCommit parser =
+    delayedCommitMap (\a _ -> a) parser (succeed ())
+
+
 thematicBreak : Parser Node
 thematicBreak =
     let
@@ -176,13 +191,11 @@ thematicBreak =
 
         lineOf : Char -> Parser ()
         lineOf breakChar =
-            delayedCommit
-                (repeat (AtLeast 3) (single breakChar) |> map (always ()))
-                (succeed ())
+            repeat (AtLeast 3) (single breakChar) |> map (always ())
     in
     inContext "thematic break" <|
         succeed (Node Closed ThematicBreak)
-            |. delayedCommit
+            |. neverCommit
                 (oneToThreeSpaces
                     |. oneOf
                         [ lineOf '*'
@@ -191,7 +204,6 @@ thematicBreak =
                         ]
                     |. end
                 )
-                (succeed ())
 
 
 atxHeading : Parser Node
@@ -292,11 +304,8 @@ setextHeading =
 indentedCodeBlock : Parser Node
 indentedCodeBlock =
     inContext "in an indented code block" <|
-        delayedCommitMap
-            (\code _ -> Node Open code)
-            (succeed IndentedCodeBlock
+        neverCommit <|
+            succeed (Node Open << IndentedCodeBlock)
                 |. ignore (Exactly 4) whitespace
                 |= keep oneOrMore (\_ -> True)
                 |. end
-            )
-            (succeed ())

@@ -78,7 +78,7 @@ parseInlines =
                 CommonMark.Block.IndentedCodeBlock code ->
                     CodeBlock code :: acc
 
-                CommonMark.Block.HardLineBreak ->
+                CommonMark.Block.BlankLine _ ->
                     acc
         )
         []
