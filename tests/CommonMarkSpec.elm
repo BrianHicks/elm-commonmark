@@ -182,4 +182,6 @@ setextHeading =
             [ example [ Heading 1 (Just <| Plain "Foo *bar*") ] "Foo *bar*\n========="
             , example [ Heading 2 (Just <| Plain "Foo *bar*") ] "Foo *bar*\n---------"
             ]
+        , describe "the content of the header may span more than one line"
+            [ example [ Heading 1 (Just <| Plain "Foo *bar\nbaz*") ] "Foo *bar\nbaz*\n====" ]
         ]

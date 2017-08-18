@@ -97,12 +97,13 @@ parseBlockLine line document =
         closeOrExtendHead : List BlockNode -> BlockNode -> List BlockNode
         closeOrExtendHead document block =
             case ( document, block ) of
+                -- add a new line onto a paragraph
+                ( (Open (Paragraph (Plain content))) :: rest, Open (Paragraph (Plain moreContent)) ) ->
+                    Open (Paragraph (Plain <| content ++ "\n" ++ moreContent)) :: rest
+
                 -- combine a single-line paragraph with a setext heading
-                ( (Open (Paragraph (Plain stuff))) :: rest, Open (Heading level _) ) ->
-                    if String.contains "\n" stuff then
-                        Open (Paragraph (Plain <| stuff ++ "\n" ++ line)) :: rest
-                    else
-                        Closed (Heading level (Just <| Plain stuff)) :: rest
+                ( (Open (Paragraph content)) :: rest, Open (Heading level _) ) ->
+                    Open (Heading level (Just content)) :: rest
 
                 -- convert a setext heading to a plain paragraph otherwise
                 ( _, Open (Heading level _) ) ->
