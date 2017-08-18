@@ -1,4 +1,4 @@
-module CommonMark.Block exposing (..)
+module CommonMark.Block exposing (Block(..), parseBlockStructure)
 
 import Parser exposing (..)
 import String.Extra
@@ -18,8 +18,8 @@ type Node
     | Closed Block
 
 
-finalizeNode : Node -> Block
-finalizeNode blockNode =
+finalize : Node -> Block
+finalize blockNode =
     case blockNode of
         Open block ->
             block
@@ -28,27 +28,53 @@ finalizeNode blockNode =
             block
 
 
+{-| Combine an already-parsed and new node, and return the combination of the
+two (or if the node was closed, the new open node and the old closed one.)
+-}
+extend : Maybe Node -> Node -> List Node
+extend existing new =
+    case ( existing, new ) of
+        -- add a new line onto a paragraph
+        ( Just (Open (Paragraph content)), Open (Paragraph moreContent) ) ->
+            [ Open (Paragraph (content ++ "\n" ++ moreContent)) ]
+
+        -- combine a single-line paragraph with a setext heading
+        ( Just (Open (Paragraph content)), Open (Heading level _) ) ->
+            [ Open (Heading level (Just content)) ]
+
+        -- convert a setext heading to a plain paragraph otherwise
+        ( _, Open (Heading level (Just content)) ) ->
+            [ Open (Paragraph content) ]
+
+        ( Just anythingElse, _ ) ->
+            [ new, anythingElse ]
+
+        ( Nothing, _ ) ->
+            [ new ]
+
+
 parseBlockStructure : List String -> Result Error (List Block)
 parseBlockStructure lines =
     let
-        helper : ( Int, String ) -> Result Error (List Node) -> Result Error (List Node)
-        helper ( rowNumber, line ) progressOrError =
-            case Result.andThen (parseBlockLine line) progressOrError of
+        parseNextLine : ( Int, String ) -> Result Error (List Node) -> Result Error (List Node)
+        parseNextLine ( rowNumber, line ) progressOrError =
+            case Result.andThen (parseLine line) progressOrError of
                 Ok newDocument ->
                     Ok newDocument
 
+                -- change the line number so we don't lose those in error messages
                 Err err ->
                     Err { err | row = rowNumber }
     in
     lines
         |> List.indexedMap (\rowNumber line -> ( rowNumber + 1, line ))
-        |> List.foldl helper (Ok [])
-        |> Result.map (List.map finalizeNode)
+        |> List.foldl parseNextLine (Ok [])
+        |> Result.map (List.map finalize)
         |> Result.map List.reverse
 
 
-parseBlockLine : String -> List Node -> Result Error (List Node)
-parseBlockLine line document =
+parseLine : String -> List Node -> Result Error (List Node)
+parseLine line document =
     let
         possibilities : Parser Node
         possibilities =
@@ -67,25 +93,13 @@ parseBlockLine line document =
                 ]
 
         closeOrExtendHead : List Node -> Node -> List Node
-        closeOrExtendHead document block =
-            case ( document, block ) of
-                -- add a new line onto a paragraph
-                ( (Open (Paragraph content)) :: rest, Open (Paragraph moreContent) ) ->
-                    Open (Paragraph (content ++ "\n" ++ moreContent)) :: rest
+        closeOrExtendHead document node =
+            case document of
+                [] ->
+                    extend Nothing node
 
-                -- combine a single-line paragraph with a setext heading
-                ( (Open (Paragraph content)) :: rest, Open (Heading level _) ) ->
-                    Open (Heading level (Just content)) :: rest
-
-                -- convert a setext heading to a plain paragraph otherwise
-                ( _, Open (Heading level _) ) ->
-                    Open (Paragraph line) :: document
-
-                ( [], _ ) ->
-                    [ block ]
-
-                ( anythingElse, _ ) ->
-                    block :: anythingElse
+                first :: rest ->
+                    extend (Just first) node ++ rest
     in
     if line == "" then
         case document of
