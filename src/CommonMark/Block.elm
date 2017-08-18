@@ -15,19 +15,18 @@ type Block
     | HardLineBreak
 
 
+type Status
+    = Open
+    | Closed
+
+
 type Node
-    = Open Block
-    | Closed Block
+    = Node Status Block
 
 
 finalize : Node -> Block
-finalize blockNode =
-    case blockNode of
-        Open block ->
-            block
-
-        Closed block ->
-            block
+finalize (Node _ block) =
+    block
 
 
 {-| Combine an already-parsed and new node, and return the combination of the
@@ -37,28 +36,28 @@ extend : Maybe Node -> Node -> List Node
 extend existing new =
     case ( existing, new ) of
         -- add a new line onto a paragraph
-        ( Just (Open (Paragraph content)), Open (Paragraph moreContent) ) ->
-            [ Open (Paragraph (content ++ "\n" ++ moreContent)) ]
+        ( Just (Node Open (Paragraph content)), Node Open (Paragraph moreContent) ) ->
+            [ Node Open (Paragraph (content ++ "\n" ++ moreContent)) ]
 
         -- combine a single-line paragraph with a setext heading
-        ( Just (Open (Paragraph content)), Open (Heading level _) ) ->
-            [ Open (Heading level (Just content)) ]
+        ( Just (Node Open (Paragraph content)), Node Open (Heading level _) ) ->
+            [ Node Open (Heading level (Just content)) ]
 
         -- convert a setext heading to a plain paragraph otherwise
-        ( _, Open (Heading level (Just content)) ) ->
-            [ Open (Paragraph content) ]
+        ( _, Node Open (Heading level (Just content)) ) ->
+            [ Node Open (Paragraph content) ]
 
         -- an indented code block following a paragraph is just a hanging indent
-        ( Just (Open (Paragraph content)), Open (IndentedCodeBlock notCode) ) ->
-            [ Open (Paragraph <| content ++ "\n" ++ notCode) ]
+        ( Just (Node Open (Paragraph content)), Node Open (IndentedCodeBlock notCode) ) ->
+            [ Node Open (Paragraph <| content ++ "\n" ++ notCode) ]
 
         -- add a new line onto an indented code block
-        ( Just (Open (IndentedCodeBlock code)), Open (IndentedCodeBlock moreCode) ) ->
-            [ Open (IndentedCodeBlock <| code ++ "\n" ++ moreCode) ]
+        ( Just (Node Open (IndentedCodeBlock code)), Node Open (IndentedCodeBlock moreCode) ) ->
+            [ Node Open (IndentedCodeBlock <| code ++ "\n" ++ moreCode) ]
 
         -- line breaks don't close indented blocks
-        ( Just (Open (IndentedCodeBlock code)), Closed HardLineBreak ) ->
-            [ Open (IndentedCodeBlock <| code ++ "\n") ]
+        ( Just (Node Open (IndentedCodeBlock code)), Node Closed HardLineBreak ) ->
+            [ Node Open (IndentedCodeBlock <| code ++ "\n") ]
 
         ( Just anythingElse, _ ) ->
             [ new, anythingElse ]
@@ -94,7 +93,7 @@ parseLine line document =
         possibilities =
             oneOf
                 [ case List.head document of
-                    Just (Open (Paragraph _)) ->
+                    Just (Node Open (Paragraph _)) ->
                         setextHeading
 
                     _ ->
@@ -105,9 +104,9 @@ parseLine line document =
                 , thematicBreak
                 , indentedCodeBlock
                 , if line == "" then
-                    succeed (Closed HardLineBreak)
+                    succeed (Node Closed HardLineBreak)
                   else
-                    succeed <| Open <| Paragraph <| String.trim line
+                    succeed <| Node Open <| Paragraph <| String.trim line
                 ]
 
         closeOrExtendHead : List Node -> Node -> List Node
@@ -157,7 +156,7 @@ thematicBreak =
                 (succeed ())
     in
     inContext "thematic break" <|
-        succeed (Closed ThematicBreak)
+        succeed (Node Closed ThematicBreak)
             |. delayedCommit
                 (oneToThreeSpaces
                     |. oneOf
@@ -214,7 +213,7 @@ atxHeading =
                    )
     in
     inContext "in an ATX heading" <|
-        map Closed <|
+        map (Node Closed) <|
             delayedCommitMap Heading
                 (succeed identity
                     |. oneToThreeSpaces
@@ -254,7 +253,7 @@ setextHeading =
                 ]
     in
     inContext "in a potential setext heading" <|
-        map Open <|
+        map (Node Open) <|
             delayedCommitMap Heading
                 (succeed identity
                     |. oneToThreeSpaces
@@ -269,7 +268,7 @@ indentedCodeBlock : Parser Node
 indentedCodeBlock =
     inContext "in an indented code block" <|
         delayedCommitMap
-            (\code _ -> Open code)
+            (\code _ -> Node Open code)
             (succeed IndentedCodeBlock
                 |. ignore (Exactly 4) whitespace
                 |= keep oneOrMore (\_ -> True)
