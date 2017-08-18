@@ -35,10 +35,19 @@ two (or if the node was closed, the new open node and the old closed one.)
 extend : Maybe Node -> Node -> List Node
 extend existing new =
     case ( existing, new ) of
+        {-
+           paragraphs
+           ----------
+        -}
         -- add a new line onto a paragraph
         ( Just (Node Open (Paragraph content)), Node Open (Paragraph moreContent) ) ->
             [ Node Open (Paragraph (content ++ "\n" ++ moreContent)) ]
 
+        {-
+           setext headings
+           ---------------
+
+        -}
         -- combine a single-line paragraph with a setext heading
         ( Just (Node Open (Paragraph content)), Node Open (Heading level _) ) ->
             [ Node Open (Heading level (Just content)) ]
@@ -47,6 +56,10 @@ extend existing new =
         ( _, Node Open (Heading level (Just content)) ) ->
             [ Node Open (Paragraph content) ]
 
+        {-
+           indented code blocks
+           --------------------
+        -}
         -- an indented code block following a paragraph is just a hanging indent
         ( Just (Node Open (Paragraph content)), Node Open (IndentedCodeBlock notCode) ) ->
             [ Node Open (Paragraph <| content ++ "\n" ++ notCode) ]
@@ -59,6 +72,18 @@ extend existing new =
         ( Just (Node Open (IndentedCodeBlock code)), Node Closed HardLineBreak ) ->
             [ Node Open (IndentedCodeBlock <| code ++ "\n") ]
 
+        {-
+           hard line breaks
+           ----------------
+        -}
+        -- hard lines breaks close everything else
+        ( Just (Node Open block), Node Closed HardLineBreak ) ->
+            [ Node Closed block ]
+
+        {-
+           everything else
+           ---------------
+        -}
         ( Just anythingElse, _ ) ->
             [ new, anythingElse ]
 
