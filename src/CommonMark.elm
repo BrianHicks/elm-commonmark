@@ -63,18 +63,22 @@ get there.
 -}
 parseInlines : List CommonMark.Block.Block -> List Block
 parseInlines =
-    List.map
-        (\block ->
+    List.foldr
+        (\block acc ->
             case block of
                 CommonMark.Block.ThematicBreak ->
-                    ThematicBreak
+                    ThematicBreak :: acc
 
                 CommonMark.Block.Heading level contents ->
-                    Heading level (Maybe.map Plain contents)
+                    Heading level (Maybe.map Plain contents) :: acc
 
                 CommonMark.Block.Paragraph contents ->
-                    Paragraph (Plain contents)
+                    Paragraph (Plain contents) :: acc
 
                 CommonMark.Block.IndentedCodeBlock code ->
-                    CodeBlock code
+                    CodeBlock code :: acc
+
+                CommonMark.Block.HardLineBreak ->
+                    acc
         )
+        []

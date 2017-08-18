@@ -12,6 +12,7 @@ type Block
     | Heading Int (Maybe String)
     | Paragraph String
     | IndentedCodeBlock String
+    | HardLineBreak
 
 
 type Node
@@ -54,6 +55,10 @@ extend existing new =
         -- add a new line onto an indented code block
         ( Just (Open (IndentedCodeBlock code)), Open (IndentedCodeBlock moreCode) ) ->
             [ Open (IndentedCodeBlock <| code ++ "\n" ++ moreCode) ]
+
+        -- line breaks don't close indented blocks
+        ( Just (Open (IndentedCodeBlock code)), Closed HardLineBreak ) ->
+            [ Open (IndentedCodeBlock <| code ++ "\n") ]
 
         ( Just anythingElse, _ ) ->
             [ new, anythingElse ]
@@ -99,7 +104,10 @@ parseLine line document =
                 , atxHeading
                 , thematicBreak
                 , indentedCodeBlock
-                , succeed <| Open <| Paragraph <| String.trim line
+                , if line == "" then
+                    succeed (Closed HardLineBreak)
+                  else
+                    succeed <| Open <| Paragraph <| String.trim line
                 ]
 
         closeOrExtendHead : List Node -> Node -> List Node
@@ -111,16 +119,8 @@ parseLine line document =
                 first :: rest ->
                     extend (Just first) node ++ rest
     in
-    if line == "" then
-        case document of
-            (Open node) :: rest ->
-                Ok <| Closed node :: rest
-
-            _ ->
-                Ok <| document
-    else
-        run possibilities line
-            |> Result.map (closeOrExtendHead document)
+    run possibilities line
+        |> Result.map (closeOrExtendHead document)
 
 
 

@@ -283,4 +283,14 @@ indentedCodeBlocks =
                 [ CodeBlock "a simple\n  indented code block" ]
                 "    a simple\n      indented code block"
             ]
+        , describe "lists take priority over code blocks"
+            [ todo "  - foo\n\n    bar"
+            , todo "1.  foo\n\n    - bar"
+            ]
+        , describe "contents are literal, not parsed as Markdown"
+            [ example
+                -- TODO: the < and > need to be turned into lt and gt entities
+                [ CodeBlock "<a/>\n*hi*\n\n- one" ]
+                "    <a/>\n    *hi*\n\n    - one"
+            ]
         ]
