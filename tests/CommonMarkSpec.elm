@@ -72,7 +72,7 @@ thematicBreak =
             ]
         , describe "four spaces is too many"
             [ todo "    ***"
-            , todo "Foo\n    ***"
+            , example [ plaintext "Foo\n***" ] "Foo\n    ***"
             ]
         , describe "more than three characters may be used"
             [ example [ ThematicBreak ] "_____________________________________" ]
@@ -93,7 +93,12 @@ thematicBreak =
         , describe "thematic breaks do not need blank lines before or after"
             [ todo "- foo\n***\n- bar" ]
         , describe "when both a thematic break and a setext heading are possible, the setext heading takes precedence"
-            [ todo "Foo\n---\nbar" ]
+            [ example
+                [ Heading 2 (Just <| Plain "Foo")
+                , plaintext "bar"
+                ]
+                "Foo\n---\nbar"
+            ]
         , describe "if you want a thematic break in a list item, use a different bullet"
             [ todo "- Foo\n- * * *" ]
         ]
@@ -116,9 +121,10 @@ atxHeading =
             [ example [ plaintext "#5 bolt" ] "#5 bolt"
             , example [ plaintext "#hashtag" ] "#hashtag"
             ]
+
+        -- TODO: fix this up when I implement inlines
         , describe "not a heading if the first # is escaped"
-            -- marked as todo because of the escaping
-            [ todo "\\## foo" ]
+            [ example [ plaintext "\\## foo" ] "\\## foo" ]
 
         -- TODO: fix this up when I implement inlines
         , describe "contents are parsed as inlines"
@@ -132,7 +138,7 @@ atxHeading =
             ]
         , describe "four spaces are too much"
             [ todo "    # foo"
-            , todo "foo\n    # bar"
+            , example [ plaintext "foo\n# bar" ] "foo\n    # bar"
             ]
         , describe "a closing sequence of # characters is optional"
             [ example [ Heading 2 (Just <| Plain "foo") ] "## foo ##"
