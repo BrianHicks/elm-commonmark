@@ -48,7 +48,6 @@ extend existing new =
         {-
            setext headings
            ---------------
-
         -}
         -- combine a single-line paragraph with a setext heading
         ( Just (Node Open (Paragraph content)), Node Open (Heading level _) ) ->
