@@ -49,6 +49,7 @@ type Block
     = ThematicBreak
     | Heading Int (Maybe Inline)
     | Paragraph Inline
+    | CodeBlock String
 
 
 {-| Inline content, for example words in a paragraph or list item
@@ -73,4 +74,7 @@ parseInlines =
 
                 CommonMark.Block.Paragraph contents ->
                     Paragraph (Plain contents)
+
+                CommonMark.Block.IndentedCodeBlock code ->
+                    CodeBlock code
         )

@@ -272,3 +272,15 @@ setextHeading =
                 "Foo\nbar\n\\---\nbaz"
             ]
         ]
+
+
+indentedCodeBlocks : Test
+indentedCodeBlocks =
+    -- TODO: don't forget the section on tabs if the spec doesn't mention it in this section
+    describe "indented code blocks"
+        [ describe "simple examples"
+            [ example
+                [ CodeBlock "a simple\n  indented code block" ]
+                "    a simple\n      indented code block"
+            ]
+        ]

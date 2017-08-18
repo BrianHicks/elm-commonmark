@@ -11,6 +11,7 @@ type Block
     = ThematicBreak
     | Heading Int (Maybe String)
     | Paragraph String
+    | IndentedCodeBlock String
 
 
 type Node
@@ -45,6 +46,14 @@ extend existing new =
         -- convert a setext heading to a plain paragraph otherwise
         ( _, Open (Heading level (Just content)) ) ->
             [ Open (Paragraph content) ]
+
+        -- an indented code block following a paragraph is just a hanging indent
+        ( Just (Open (Paragraph content)), Open (IndentedCodeBlock notCode) ) ->
+            [ Open (Paragraph <| content ++ "\n" ++ notCode) ]
+
+        -- add a new line onto an indented code block
+        ( Just (Open (IndentedCodeBlock code)), Open (IndentedCodeBlock moreCode) ) ->
+            [ Open (IndentedCodeBlock <| code ++ "\n" ++ moreCode) ]
 
         ( Just anythingElse, _ ) ->
             [ new, anythingElse ]
@@ -89,6 +98,7 @@ parseLine line document =
                 -- and now the things that aren't dependent on the preceding content...
                 , atxHeading
                 , thematicBreak
+                , indentedCodeBlock
                 , succeed <| Open <| Paragraph <| String.trim line
                 ]
 
@@ -253,3 +263,16 @@ setextHeading =
                     |. end
                 )
                 (succeed Nothing)
+
+
+indentedCodeBlock : Parser Node
+indentedCodeBlock =
+    inContext "in an indented code block" <|
+        delayedCommitMap
+            (\code _ -> Open code)
+            (succeed IndentedCodeBlock
+                |. ignore (Exactly 4) whitespace
+                |= keep oneOrMore (\_ -> True)
+                |. end
+            )
+            (succeed ())
