@@ -12,7 +12,6 @@ module CommonMark exposing (Block(..), Document, Inline(..), parseString)
 -}
 
 import Parser exposing (..)
-import Parser.LowLevel as LowLevel
 import String.Extra
 
 
@@ -27,8 +26,7 @@ or more block- or inline-level elements.
 -}
 type Block
     = ThematicBreak
-      -- TODO: Should Heading have `Maybe Inline` instead for no-content headings?
-    | Heading Int Inline
+    | Heading Int (Maybe Inline)
     | Paragraph Inline
 
 
@@ -101,14 +99,13 @@ parseBlockLine line document =
             case ( document, block ) of
                 -- combine a single-line paragraph with a setext heading
                 ( (Open (Paragraph (Plain stuff))) :: rest, Open (Heading level _) ) ->
-                    -- TODO: wow, that's super awkward. This is a setext heading.
                     if String.contains "\n" stuff then
                         Open (Paragraph (Plain <| stuff ++ "\n" ++ line)) :: rest
                     else
-                        Closed (Heading level (Plain stuff)) :: rest
+                        Closed (Heading level (Just <| Plain stuff)) :: rest
 
                 -- convert a setext heading to a plain paragraph otherwise
-                ( _, Open (Heading level (Plain "")) ) ->
+                ( _, Open (Heading level _) ) ->
                     Open (Paragraph (Plain line)) :: document
 
                 ( [], _ ) ->
@@ -186,13 +183,12 @@ atxHeading =
             in
             count |> andThen validate
 
-        words : Parser Inline
+        words : Parser String
         words =
             succeed
                 (String.concat
                     >> String.trim
                     >> String.Extra.replace "\\#" "#"
-                    >> Plain
                 )
                 |= (repeat zeroOrMore <|
                         oneOf
@@ -223,9 +219,16 @@ atxHeading =
                     [ succeed identity
                         |. ignore oneOrMore ((==) ' ')
                         |= words
-                    , succeed (Plain "")
+                    , succeed ""
                     ]
                     |. end
+                    |> map
+                        (\stuff ->
+                            if stuff == "" then
+                                Nothing
+                            else
+                                Just (Plain stuff)
+                        )
                 )
 
 
@@ -251,4 +254,4 @@ setextHeading =
         map Open <|
             delayedCommitMap Heading
                 level
-                (succeed (Plain ""))
+                (succeed Nothing)

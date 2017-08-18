@@ -103,12 +103,12 @@ atxHeading : Test
 atxHeading =
     describe "ATX headings"
         [ describe "simple headings"
-            [ example [ Heading 1 (Plain "foo") ] "# foo"
-            , example [ Heading 2 (Plain "foo") ] "## foo"
-            , example [ Heading 3 (Plain "foo") ] "### foo"
-            , example [ Heading 4 (Plain "foo") ] "#### foo"
-            , example [ Heading 5 (Plain "foo") ] "##### foo"
-            , example [ Heading 6 (Plain "foo") ] "###### foo"
+            [ example [ Heading 1 (Just <| Plain "foo") ] "# foo"
+            , example [ Heading 2 (Just <| Plain "foo") ] "## foo"
+            , example [ Heading 3 (Just <| Plain "foo") ] "### foo"
+            , example [ Heading 4 (Just <| Plain "foo") ] "#### foo"
+            , example [ Heading 5 (Just <| Plain "foo") ] "##### foo"
+            , example [ Heading 6 (Just <| Plain "foo") ] "###### foo"
             ]
         , describe "more than 6 characters is not a heading"
             [ example [ plaintext "####### foo" ] "####### foo" ]
@@ -122,55 +122,55 @@ atxHeading =
 
         -- TODO: fix this up when I implement inlines
         , describe "contents are parsed as inlines"
-            [ example [ Heading 1 (Plain "foo *bar* \\*baz\\*") ] "# foo *bar* \\*baz\\*" ]
+            [ example [ Heading 1 (Just <| Plain "foo *bar* \\*baz\\*") ] "# foo *bar* \\*baz\\*" ]
         , describe "leading and trailing blanks are ignored in parsing inline content"
-            [ example [ Heading 1 (Plain "foo") ] "#                  foo                     " ]
+            [ example [ Heading 1 (Just <| Plain "foo") ] "#                  foo                     " ]
         , describe "one to three spaces indentation are allowed"
-            [ example [ Heading 3 (Plain "foo") ] " ### foo"
-            , example [ Heading 2 (Plain "foo") ] "  ## foo"
-            , example [ Heading 1 (Plain "foo") ] "   # foo"
+            [ example [ Heading 3 (Just <| Plain "foo") ] " ### foo"
+            , example [ Heading 2 (Just <| Plain "foo") ] "  ## foo"
+            , example [ Heading 1 (Just <| Plain "foo") ] "   # foo"
             ]
         , describe "four spaces are too much"
             [ todo "    # foo"
             , todo "foo\n    # bar"
             ]
         , describe "a closing sequence of # characters is optional"
-            [ example [ Heading 2 (Plain "foo") ] "## foo ##"
-            , example [ Heading 3 (Plain "bar") ] "  ###   bar    ###"
+            [ example [ Heading 2 (Just <| Plain "foo") ] "## foo ##"
+            , example [ Heading 3 (Just <| Plain "bar") ] "  ###   bar    ###"
             , describe "it need not be the same length as the opening sequence"
-                [ example [ Heading 1 (Plain "foo") ] "# foo ##################################"
-                , example [ Heading 5 (Plain "foo") ] "##### foo ##"
+                [ example [ Heading 1 (Just <| Plain "foo") ] "# foo ##################################"
+                , example [ Heading 5 (Just <| Plain "foo") ] "##### foo ##"
                 ]
             , describe "spaces are allowed after the closing sequence"
-                [ example [ Heading 3 (Plain "foo") ] "### foo ###     " ]
+                [ example [ Heading 3 (Just <| Plain "foo") ] "### foo ###     " ]
             , describe "a sequence of # characters with anything but spaces following it is not a closing sequence, but counts as part of the contents of the heading"
-                [ example [ Heading 3 (Plain "foo ### b") ] "### foo ### b" ]
+                [ example [ Heading 3 (Just <| Plain "foo ### b") ] "### foo ### b" ]
             , describe "the closing sequence must be preceded by a space"
-                [ example [ Heading 1 (Plain "foo#") ] "# foo#" ]
+                [ example [ Heading 1 (Just <| Plain "foo#") ] "# foo#" ]
             , describe "backslash-escaped # characters do not count as part of the closing sequence"
-                [ example [ Heading 3 (Plain "foo ###") ] "### foo \\###"
-                , example [ Heading 2 (Plain "foo ###") ] "## foo #\\##"
-                , example [ Heading 1 (Plain "foo #") ] "# foo \\#"
+                [ example [ Heading 3 (Just <| Plain "foo ###") ] "### foo \\###"
+                , example [ Heading 2 (Just <| Plain "foo ###") ] "## foo #\\##"
+                , example [ Heading 1 (Just <| Plain "foo #") ] "# foo \\#"
                 ]
             ]
         , describe "don't need to be separated from surrounding context by blank lines"
             [ example
                 [ ThematicBreak
-                , Heading 2 (Plain "foo")
+                , Heading 2 (Just <| Plain "foo")
                 , ThematicBreak
                 ]
                 "****\n## foo\n****"
             , example
                 [ plaintext "Foo bar"
-                , Heading 1 (Plain "baz")
+                , Heading 1 (Just <| Plain "baz")
                 , plaintext "Bar foo"
                 ]
                 "Foo bar\n# baz\nBar foo"
             ]
         , describe "ATX headings can be empty"
-            [ example [ Heading 2 (Plain "") ] "## "
-            , example [ Heading 1 (Plain "") ] "#"
-            , example [ Heading 3 (Plain "") ] "### ###"
+            [ example [ Heading 2 Nothing ] "## "
+            , example [ Heading 1 Nothing ] "#"
+            , example [ Heading 3 Nothing ] "### ###"
             ]
         ]
 
@@ -179,7 +179,7 @@ setextHeading : Test
 setextHeading =
     describe "setext headings"
         [ describe "simple headings"
-            [ example [ Heading 1 (Plain "Foo *bar*") ] "Foo *bar*\n========="
-            , example [ Heading 2 (Plain "Foo *bar*") ] "Foo *bar*\n---------"
+            [ example [ Heading 1 (Just <| Plain "Foo *bar*") ] "Foo *bar*\n========="
+            , example [ Heading 2 (Just <| Plain "Foo *bar*") ] "Foo *bar*\n---------"
             ]
         ]
