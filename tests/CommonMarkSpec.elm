@@ -16,9 +16,7 @@ group description tester candidates =
         List.map
             (\raw ->
                 test
-                    (raw
-                        |> replace " " "·"
-                    )
+                    (testName raw)
                     (tester raw)
             )
             candidates
@@ -26,11 +24,13 @@ group description tester candidates =
 
 testName : String -> String
 testName raw =
-    raw |> replace " " "·"
+    raw
+        |> replace " " "·"
+        |> replace "\n" "\\n"
 
 
-testParsed : Document -> String -> Test
-testParsed document raw =
+example : Document -> String -> Test
+example document raw =
     test (testName raw) <|
         \_ ->
             Expect.equal
@@ -38,183 +38,138 @@ testParsed document raw =
                 (parseString raw)
 
 
-testError : String -> Test
-testError badRaw =
-    -- TODO: most things that use this should actually be paragraphs. I'd like
-    -- to get rid of this eventually!
-    test (testName badRaw) <|
-        \_ ->
-            case parseString badRaw of
-                Err _ ->
-                    Expect.pass
+todo : String -> Test
+todo =
+    testName >> Test.todo
 
-                Ok [] ->
-                    Expect.pass
 
-                Ok stuff ->
-                    Expect.fail <| "expected to fail, but got `" ++ toString stuff ++ "`. This probably means you should use `testParsed` instead!"
+plaintext : String -> Block
+plaintext =
+    Plain >> Paragraph
 
 
 thematicBreak : Test
 thematicBreak =
-    let
-        isOnlyThematicBreak : String -> () -> Expectation
-        isOnlyThematicBreak raw _ =
-            -- reversed because the ordering is built for pipelines
-            Expect.equal
-                (Ok [ ThematicBreak ])
-                (parseString raw)
-
-        isNotThematicBreak : String -> () -> Expectation
-        isNotThematicBreak raw _ =
-            case parseString raw |> Result.map List.head of
-                Ok (Just ThematicBreak) ->
-                    Expect.fail "got a thematic break"
-
-                Ok (Just _) ->
-                    Expect.pass
-
-                Ok Nothing ->
-                    Expect.pass
-
-                Err _ ->
-                    -- TODO: revisit this when the parser is more fully
-                    -- implemented. Should it fail with the error?
-                    Expect.pass
-
-        containsThematicBreak : String -> () -> Expectation
-        containsThematicBreak raw _ =
-            -- TODO: revisit this once other block-level elements are
-            -- implemented. Right now it's an error since only thematic breaks
-            -- are implemented.
-            Expect.pass
-    in
     describe "thematic breaks"
-        [ group "valid characters"
-            isOnlyThematicBreak
-            [ "***", "---", "___" ]
-        , group "wrong characters"
-            isNotThematicBreak
-            [ "+++", "===" ]
-        , group "not enough characters"
-            isNotThematicBreak
-            [ "--", "**", "__" ]
-        , group "one to three spaces indent are allowed"
-            isOnlyThematicBreak
-            [ " ***", "  ***", "   ***" ]
-        , group "four spaces is too many"
-            isNotThematicBreak
-            [ "    ***", "Foo\n    ***" ]
-        , group "more than three characters may be used"
-            isOnlyThematicBreak
-            [ "_____________________________________" ]
-        , group "spaces are allowed between the characters"
-            isOnlyThematicBreak
-            [ " - - -"
-            , " **  * ** * ** * **"
-            , "-     -     -     -"
+        [ describe "valid characters"
+            [ example [ ThematicBreak ] "***"
+            , example [ ThematicBreak ] "---"
+            , example [ ThematicBreak ] "___"
             ]
-        , group "spaces are allowed at the end"
-            isOnlyThematicBreak
-            [ "- - - -    " ]
-        , group "no other characters may occur in the line"
-            isNotThematicBreak
-            [ "_ _ _ _ a"
-            , "a------"
-            , "---a---"
+        , describe "wrong characters"
+            [ example [ plaintext "+++" ] "+++"
+            , example [ plaintext "===" ] "==="
             ]
-        , group "it is required that all of the non-whitespace characters be the same"
-            isNotThematicBreak
-            [ " *-*" ]
-        , group "thematic breaks do not need blank lines before or after"
-            containsThematicBreak
-            [ "- foo\n***\n- bar" ]
-        , group "when both a thematic break and a setext heading are possible, the setext heading takes precedence"
-            isNotThematicBreak
-            [ "Foo\n---\nbar" ]
-        , group "when both a thematic break and a list item are possible, the thematic break takes precedence"
-            containsThematicBreak
-            [ "* Foo\n* * *\n* Bar" ]
-        , group "if you want a thematic break in a list item, use a different bullet"
-            containsThematicBreak
-            [ "- Foo\n- * * *" ]
+        , describe "not enough characters"
+            [ example [ plaintext "--" ] "--"
+            , example [ plaintext "**" ] "**"
+            , example [ plaintext "__" ] "__"
+            ]
+        , describe "one to three spaces indent are allowed"
+            [ example [ ThematicBreak ] " ***"
+            , example [ ThematicBreak ] "  ***"
+            , example [ ThematicBreak ] "   ***"
+            ]
+        , describe "four spaces is too many"
+            [ todo "    ***"
+            , todo "Foo\n    ***"
+            ]
+        , describe "more than three characters may be used"
+            [ example [ ThematicBreak ] "_____________________________________" ]
+        , describe "spaces are allowed between the characters"
+            [ example [ ThematicBreak ] " - - -"
+            , example [ ThematicBreak ] " **  * ** * ** * **"
+            , example [ ThematicBreak ] "-     -     -     -"
+            ]
+        , describe "spaces are allowed at the end"
+            [ example [ ThematicBreak ] "- - - -    " ]
+        , describe "no other characters may occur in the line"
+            [ example [ plaintext "_ _ _ _ a" ] "_ _ _ _ a"
+            , example [ plaintext "a------" ] "a------"
+            , example [ plaintext "---a---" ] "---a---"
+            ]
+        , describe "it is required that all of the non-whitespace characters be the same"
+            [ example [ plaintext " *-*" ] " *-*" ]
+        , describe "thematic breaks do not need blank lines before or after"
+            [ todo "- foo\n***\n- bar" ]
+        , describe "when both a thematic break and a setext heading are possible, the setext heading takes precedence"
+            [ todo "Foo\n---\nbar" ]
+        , describe "if you want a thematic break in a list item, use a different bullet"
+            [ todo "- Foo\n- * * *" ]
         ]
 
 
 atxHeading : Test
 atxHeading =
-    let
-        isNotAtxHeading : String -> () -> Expectation
-        isNotAtxHeading raw _ =
-            case parseString raw of
-                Ok [ Heading _ _ ] ->
-                    Expect.fail "got a heading"
-
-                Ok _ ->
-                    Expect.pass
-
-                Err _ ->
-                    -- TODO: revisit this when the parser is more fully
-                    -- implemented. Should it fail with the error?
-                    Expect.pass
-    in
     describe "ATX headings"
         [ describe "simple headings"
-            [ testParsed [ Heading 1 "foo" ] "# foo"
-            , testParsed [ Heading 2 "foo" ] "## foo"
-            , testParsed [ Heading 3 "foo" ] "### foo"
-            , testParsed [ Heading 4 "foo" ] "#### foo"
-            , testParsed [ Heading 5 "foo" ] "##### foo"
-            , testParsed [ Heading 6 "foo" ] "###### foo"
+            [ example [ Heading 1 (Plain "foo") ] "# foo"
+            , example [ Heading 2 (Plain "foo") ] "## foo"
+            , example [ Heading 3 (Plain "foo") ] "### foo"
+            , example [ Heading 4 (Plain "foo") ] "#### foo"
+            , example [ Heading 5 (Plain "foo") ] "##### foo"
+            , example [ Heading 6 (Plain "foo") ] "###### foo"
             ]
         , describe "more than 6 characters is not a heading"
-            [ testError "####### foo" ]
+            [ example [ plaintext "####### foo" ] "####### foo" ]
         , describe "at least one space is required between the # characters and the heading's contents"
-            [ testError "#5 bolt"
-            , testError "#hashtag"
+            [ example [ plaintext "#5 bolt" ] "#5 bolt"
+            , example [ plaintext "#hashtag" ] "#hashtag"
             ]
         , describe "not a heading if the first # is escaped"
-            [ testError "\\## foo" ]
+            -- marked as todo because of the escaping
+            [ todo "\\## foo" ]
 
         -- TODO: fix this up when I implement inlines
         , describe "contents are parsed as inlines"
-            [ testParsed [ Heading 1 "foo *bar* \\*baz\\*" ] "# foo *bar* \\*baz\\*" ]
+            [ example [ Heading 1 (Plain "foo *bar* \\*baz\\*") ] "# foo *bar* \\*baz\\*" ]
         , describe "leading and trailing blanks are ignored in parsing inline content"
-            [ testParsed [ Heading 1 "foo" ] "#                  foo                     " ]
+            [ example [ Heading 1 (Plain "foo") ] "#                  foo                     " ]
         , describe "one to three spaces indentation are allowed"
-            [ testParsed [ Heading 3 "foo" ] " ### foo"
-            , testParsed [ Heading 2 "foo" ] "  ## foo"
-            , testParsed [ Heading 1 "foo" ] "   # foo"
+            [ example [ Heading 3 (Plain "foo") ] " ### foo"
+            , example [ Heading 2 (Plain "foo") ] "  ## foo"
+            , example [ Heading 1 (Plain "foo") ] "   # foo"
             ]
         , describe "four spaces are too much"
-            [ testError "    # foo"
-            , testError "foo\n    # bar"
+            [ todo "    # foo"
+            , todo "foo\n    # bar"
             ]
         , describe "a closing sequence of # characters is optional"
-            [ testParsed [ Heading 2 "foo" ] "## foo ##"
-            , testParsed [ Heading 3 "bar" ] "  ###   bar    ###"
+            [ example [ Heading 2 (Plain "foo") ] "## foo ##"
+            , example [ Heading 3 (Plain "bar") ] "  ###   bar    ###"
             , describe "it need not be the same length as the opening sequence"
-                [ testParsed [ Heading 1 "foo" ] "# foo ##################################"
-                , testParsed [ Heading 5 "foo" ] "##### foo ##"
+                [ example [ Heading 1 (Plain "foo") ] "# foo ##################################"
+                , example [ Heading 5 (Plain "foo") ] "##### foo ##"
                 ]
             , describe "spaces are allowed after the closing sequence"
-                [ testParsed [ Heading 3 "foo" ] "### foo ###     " ]
+                [ example [ Heading 3 (Plain "foo") ] "### foo ###     " ]
             , describe "a sequence of # characters with anything but spaces following it is not a closing sequence, but counts as part of the contents of the heading"
-                [ testParsed [ Heading 3 "foo ### b" ] "### foo ### b" ]
+                [ example [ Heading 3 (Plain "foo ### b") ] "### foo ### b" ]
             , describe "the closing sequence must be preceded by a space"
-                [ testParsed [ Heading 1 "foo#" ] "# foo#" ]
+                [ example [ Heading 1 (Plain "foo#") ] "# foo#" ]
             , describe "backslash-escaped # characters do not count as part of the closing sequence"
-                [ testParsed [ Heading 3 "foo ###" ] "### foo \\###"
-                , testParsed [ Heading 2 "foo ###" ] "## foo #\\##"
-                , testParsed [ Heading 1 "foo #" ] "# foo \\#"
+                [ example [ Heading 3 (Plain "foo ###") ] "### foo \\###"
+                , example [ Heading 2 (Plain "foo ###") ] "## foo #\\##"
+                , example [ Heading 1 (Plain "foo #") ] "# foo \\#"
                 ]
             ]
         , describe "don't need to be separated from surrounding context by blank lines"
-            [ testParsed
+            [ example
                 [ ThematicBreak
-                , Heading 2 "foo"
+                , Heading 2 (Plain "foo")
                 , ThematicBreak
                 ]
                 "****\n## foo\n****"
+            , example
+                [ plaintext "Foo bar"
+                , Heading 1 (Plain "baz")
+                , plaintext "Bar foo"
+                ]
+                "Foo bar\n# baz\nBar foo"
+            ]
+        , describe "ATX headings can be empty"
+            [ example [ Heading 2 (Plain "") ] "## "
+            , example [ Heading 1 (Plain "") ] "#"
+            , example [ Heading 3 (Plain "") ] "### ###"
             ]
         ]

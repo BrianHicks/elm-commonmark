@@ -1,4 +1,4 @@
-module CommonMark exposing (Block(..), Document, parseString)
+module CommonMark exposing (Block(..), Document, Inline(..), parseString)
 
 {-| Parse [CommonMark](http://commonmark.org/)-formatted Markdown files.
 
@@ -27,7 +27,67 @@ or more block- or inline-level elements.
 -}
 type Block
     = ThematicBreak
-    | Heading Int String
+      -- TODO: Should Heading have `Maybe Inline` instead for no-content headings?
+    | Heading Int Inline
+    | Paragraph Inline
+
+
+type Inline
+    = Plain String
+
+
+parseString : String -> Result Error Document
+parseString raw =
+    raw
+        |> String.lines
+        |> parseBlockStructure
+
+
+parseBlockStructure : List String -> Result Error Document
+parseBlockStructure lines =
+    let
+        helper : ( Int, String ) -> Result Error Document -> Result Error Document
+        helper ( rowNumber, line ) progressOrError =
+            case Result.andThen (parseBlockLine line) progressOrError of
+                Ok newDocument ->
+                    Ok newDocument
+
+                Err err ->
+                    Err { err | row = rowNumber }
+    in
+    -- TODO: close terminal partial block and reverse list
+    lines
+        |> List.indexedMap (\rowNumber line -> ( rowNumber + 1, line ))
+        |> List.foldl helper (Ok [])
+        |> Result.map List.reverse
+
+
+parseBlockLine : String -> Document -> Result Error Document
+parseBlockLine line document =
+    let
+        possibilities : Parser Block
+        possibilities =
+            oneOf
+                [ thematicBreak
+                , atxHeading
+                , succeed <| Paragraph <| Plain line
+                ]
+
+        closeOrExtendHead : Document -> Block -> Document
+        closeOrExtendHead document block =
+            case ( document, block ) of
+                ( [], _ ) ->
+                    [ block ]
+
+                ( anythingElse, _ ) ->
+                    block :: anythingElse
+    in
+    run possibilities line
+        |> Result.map (closeOrExtendHead document)
+
+
+
+-- parsers!
 
 
 whitespace : Char -> Bool
@@ -35,14 +95,6 @@ whitespace c =
     c == ' ' || c == '\t'
 
 
-newlineChar : Char -> Bool
-newlineChar c =
-    c == '\n' || c == '\x0D'
-
-
-{-| Most of the CommonMark block elements allow one to three spaces before the
-beginning of the block. So, helper parser!
--}
 oneToThreeSpaces : Parser ()
 oneToThreeSpaces =
     oneOf
@@ -50,15 +102,6 @@ oneToThreeSpaces =
         , symbol "  "
         , symbol " "
         , succeed ()
-        ]
-
-
-eol : Parser ()
-eol =
-    oneOf
-        [ symbol "\n"
-        , symbol "\x0D\n"
-        , end
         ]
 
 
@@ -73,17 +116,21 @@ thematicBreak =
         lineOf : Char -> Parser ()
         lineOf breakChar =
             delayedCommit
-                (oneToThreeSpaces |. single breakChar)
-                (repeat (AtLeast 2) (single breakChar) |> map (always ()))
+                (repeat (AtLeast 3) (single breakChar) |> map (always ()))
+                (succeed ())
     in
     inContext "thematic break" <|
         succeed ThematicBreak
-            |. oneOf
-                [ lineOf '*'
-                , lineOf '-'
-                , lineOf '_'
-                ]
-            |. eol
+            |. delayedCommit
+                (oneToThreeSpaces
+                    |. oneOf
+                        [ lineOf '*'
+                        , lineOf '-'
+                        , lineOf '_'
+                        ]
+                    |. end
+                )
+                (succeed ())
 
 
 atxHeading : Parser Block
@@ -104,39 +151,31 @@ atxHeading =
             in
             count |> andThen validate
 
-        trailers : Parser String
-        trailers =
-            oneOf
-                [ -- the closing header of `## foo ##`
-                  delayedCommit
-                    (ignore oneOrMore whitespace
-                        |. ignore oneOrMore ((==) '#')
-                        |. ignore zeroOrMore whitespace
-                    )
-                    (oneOf
-                        [ peek "\n"
-                        , peek "\x0D\n"
-                        , end
-                        ]
-                    )
-                    |> map (\_ -> "")
-
-                -- the trailing whitespace of `## foo  `
-                , ignore zeroOrMore whitespace
-                    |> source
-                ]
-
-        wordsWithoutClosingSequence : Parser String
-        wordsWithoutClosingSequence =
-            map2 (++)
-                (keep oneOrMore
-                    (\c -> not (whitespace c) && not (newlineChar c))
-                    |> map (String.Extra.replace "\\#" "#")
+        words : Parser Inline
+        words =
+            succeed
+                (String.concat
+                    >> String.trim
+                    >> String.Extra.replace "\\#" "#"
+                    >> Plain
                 )
-                trailers
-                |> repeat oneOrMore
-                |> map (String.concat >> String.trim)
-                |> inContext "in the header contents"
+                |= (repeat zeroOrMore <|
+                        oneOf
+                            [ -- closing hashes like in `## foo ##`
+                              delayedCommit
+                                (ignore oneOrMore ((==) '#')
+                                    |. ignore zeroOrMore whitespace
+                                    |. end
+                                )
+                                (succeed "")
+
+                            -- normal non-whitespace non-closing header word characters
+                            , keep oneOrMore (not << whitespace)
+
+                            -- regular single spaces
+                            , keep (Exactly 1) ((==) ' ')
+                            ]
+                   )
     in
     inContext "in an ATX heading" <|
         delayedCommitMap Heading
@@ -144,46 +183,11 @@ atxHeading =
                 |. oneToThreeSpaces
                 |= level
             )
-            (succeed identity
-                |. ignore oneOrMore ((==) ' ')
-                |= wordsWithoutClosingSequence
-                |. eol
-            )
-
-
-{-| parse a string into CommonMark AST. You can format this however you like;
-it's just a list of block-level elements.
-
-TODO: examples! And elm-doc-test!
-
--}
-parseString : String -> Result Error Document
-parseString raw =
-    let
-        root =
-            oneOf
-                [ atxHeading
-                , thematicBreak
+            (oneOf
+                [ succeed identity
+                    |. ignore oneOrMore ((==) ' ')
+                    |= words
+                , succeed (Plain "")
                 ]
-                |> repeat zeroOrMore
-                |> inContext "a Markdown document"
-    in
-    run root raw
-
-
-
--- UTILS
-
-
-peek : String -> Parser ()
-peek stuff =
-    succeed (,)
-        |= LowLevel.getOffset
-        |= LowLevel.getSource
-        |> andThen
-            (\( pos, src ) ->
-                if String.slice pos (pos + String.length stuff) src == stuff then
-                    succeed ()
-                else
-                    fail "peek failed"
+                |. end
             )
