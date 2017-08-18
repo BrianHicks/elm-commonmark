@@ -85,13 +85,17 @@ parseBlockLine line document =
         possibilities : Parser BlockNode
         possibilities =
             oneOf
-                [ if List.isEmpty document then
-                    fail "setext headings are not possible for first lines"
-                  else
-                    setextHeading
+                [ case List.head document of
+                    Just (Open (Paragraph _)) ->
+                        setextHeading
+
+                    _ ->
+                        fail "setext headings can only follow open paragraphs"
+
+                -- and now the things that aren't dependent on the preceding content...
                 , atxHeading
                 , thematicBreak
-                , succeed <| Open <| Paragraph <| Plain line
+                , succeed <| Open <| Paragraph <| Plain <| String.trim line
                 ]
 
         closeOrExtendHead : List BlockNode -> BlockNode -> List BlockNode
@@ -102,8 +106,8 @@ parseBlockLine line document =
                     Open (Paragraph (Plain <| content ++ "\n" ++ moreContent)) :: rest
 
                 -- combine a single-line paragraph with a setext heading
-                ( (Open (Paragraph content)) :: rest, Open (Heading level _) ) ->
-                    Open (Heading level (Just content)) :: rest
+                ( (Open (Paragraph (Plain content))) :: rest, Open (Heading level _) ) ->
+                    Open (Heading level (Just <| Plain content)) :: rest
 
                 -- convert a setext heading to a plain paragraph otherwise
                 ( _, Open (Heading level _) ) ->
@@ -115,8 +119,16 @@ parseBlockLine line document =
                 ( anythingElse, _ ) ->
                     block :: anythingElse
     in
-    run possibilities line
-        |> Result.map (closeOrExtendHead document)
+    if line == "" then
+        case document of
+            (Open node) :: rest ->
+                Ok <| Closed node :: rest
+
+            _ ->
+                Ok <| document
+    else
+        run possibilities line
+            |> Result.map (closeOrExtendHead document)
 
 
 
@@ -245,14 +257,17 @@ setextHeading =
             oneOf
                 [ succeed 1
                     |. ignore oneOrMore ((==) '=')
-                    |. end
                 , succeed 2
                     |. ignore oneOrMore ((==) '-')
-                    |. end
                 ]
     in
     inContext "in a potential setext heading" <|
         map Open <|
             delayedCommitMap Heading
-                level
+                (succeed identity
+                    |. oneToThreeSpaces
+                    |= level
+                    |. ignore zeroOrMore whitespace
+                    |. end
+                )
                 (succeed Nothing)
