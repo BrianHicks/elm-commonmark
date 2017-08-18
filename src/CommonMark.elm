@@ -43,10 +43,29 @@ parseString raw =
         |> parseBlockStructure
 
 
+
+-- blocks
+
+
+type BlockNode
+    = Open Block
+    | Closed Block
+
+
+finalizeBlockNode : BlockNode -> Block
+finalizeBlockNode blockNode =
+    case blockNode of
+        Open block ->
+            block
+
+        Closed block ->
+            block
+
+
 parseBlockStructure : List String -> Result Error Document
 parseBlockStructure lines =
     let
-        helper : ( Int, String ) -> Result Error Document -> Result Error Document
+        helper : ( Int, String ) -> Result Error (List BlockNode) -> Result Error (List BlockNode)
         helper ( rowNumber, line ) progressOrError =
             case Result.andThen (parseBlockLine line) progressOrError of
                 Ok newDocument ->
@@ -55,27 +74,43 @@ parseBlockStructure lines =
                 Err err ->
                     Err { err | row = rowNumber }
     in
-    -- TODO: close terminal partial block and reverse list
     lines
         |> List.indexedMap (\rowNumber line -> ( rowNumber + 1, line ))
         |> List.foldl helper (Ok [])
+        |> Result.map (List.map finalizeBlockNode)
         |> Result.map List.reverse
 
 
-parseBlockLine : String -> Document -> Result Error Document
+parseBlockLine : String -> List BlockNode -> Result Error (List BlockNode)
 parseBlockLine line document =
     let
-        possibilities : Parser Block
+        possibilities : Parser BlockNode
         possibilities =
             oneOf
-                [ thematicBreak
+                [ if List.isEmpty document then
+                    fail "setext headings are not possible for first lines"
+                  else
+                    setextHeading
                 , atxHeading
-                , succeed <| Paragraph <| Plain line
+                , thematicBreak
+                , succeed <| Open <| Paragraph <| Plain line
                 ]
 
-        closeOrExtendHead : Document -> Block -> Document
+        closeOrExtendHead : List BlockNode -> BlockNode -> List BlockNode
         closeOrExtendHead document block =
             case ( document, block ) of
+                -- combine a single-line paragraph with a setext heading
+                ( (Open (Paragraph (Plain stuff))) :: rest, Open (Heading level _) ) ->
+                    -- TODO: wow, that's super awkward. This is a setext heading.
+                    if String.contains "\n" stuff then
+                        Open (Paragraph (Plain <| stuff ++ "\n" ++ line)) :: rest
+                    else
+                        Closed (Heading level (Plain stuff)) :: rest
+
+                -- convert a setext heading to a plain paragraph otherwise
+                ( _, Open (Heading level (Plain "")) ) ->
+                    Open (Paragraph (Plain line)) :: document
+
                 ( [], _ ) ->
                     [ block ]
 
@@ -105,7 +140,7 @@ oneToThreeSpaces =
         ]
 
 
-thematicBreak : Parser Block
+thematicBreak : Parser BlockNode
 thematicBreak =
     let
         single : Char -> Parser ()
@@ -120,7 +155,7 @@ thematicBreak =
                 (succeed ())
     in
     inContext "thematic break" <|
-        succeed ThematicBreak
+        succeed (Closed ThematicBreak)
             |. delayedCommit
                 (oneToThreeSpaces
                     |. oneOf
@@ -133,7 +168,7 @@ thematicBreak =
                 (succeed ())
 
 
-atxHeading : Parser Block
+atxHeading : Parser BlockNode
 atxHeading =
     let
         level : Parser Int
@@ -178,16 +213,42 @@ atxHeading =
                    )
     in
     inContext "in an ATX heading" <|
-        delayedCommitMap Heading
-            (succeed identity
-                |. oneToThreeSpaces
-                |= level
-            )
-            (oneOf
-                [ succeed identity
-                    |. ignore oneOrMore ((==) ' ')
-                    |= words
-                , succeed (Plain "")
+        map Closed <|
+            delayedCommitMap Heading
+                (succeed identity
+                    |. oneToThreeSpaces
+                    |= level
+                )
+                (oneOf
+                    [ succeed identity
+                        |. ignore oneOrMore ((==) ' ')
+                        |= words
+                    , succeed (Plain "")
+                    ]
+                    |. end
+                )
+
+
+{-| since we're parsing line-by-line, setext headings just need to find the
+underline character, but produce a heading. So we use an empty Heading for that
+purpose.
+-}
+setextHeading : Parser BlockNode
+setextHeading =
+    let
+        level : Parser Int
+        level =
+            oneOf
+                [ succeed 1
+                    |. ignore oneOrMore ((==) '=')
+                    |. end
+                , succeed 2
+                    |. ignore oneOrMore ((==) '-')
+                    |. end
                 ]
-                |. end
-            )
+    in
+    inContext "in a potential setext heading" <|
+        map Open <|
+            delayedCommitMap Heading
+                level
+                (succeed (Plain ""))

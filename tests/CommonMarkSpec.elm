@@ -173,3 +173,13 @@ atxHeading =
             , example [ Heading 3 (Plain "") ] "### ###"
             ]
         ]
+
+
+setextHeading : Test
+setextHeading =
+    describe "setext headings"
+        [ describe "simple headings"
+            [ example [ Heading 1 (Plain "Foo *bar*") ] "Foo *bar*\n========="
+            , example [ Heading 2 (Plain "Foo *bar*") ] "Foo *bar*\n---------"
+            ]
+        ]
