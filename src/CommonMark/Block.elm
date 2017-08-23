@@ -69,82 +69,59 @@ finalize (Node _ block) =
 {-| Combine an already-parsed and new node, and return the combination of the
 two (or if the node was closed, the new open node and the old closed one.)
 -}
-extend : Maybe Node -> Node -> List Node
-extend existing new =
-    case ( existing, new ) of
+extend : Node -> List Node -> List Node
+extend new existing =
+    case ( new, existing ) of
         {-
            paragraphs
            ----------
         -}
         -- add a new line onto a paragraph
-        ( Just (Node Open (Paragraph content)), Node Open (Paragraph moreContent) ) ->
-            [ Node Open (Paragraph (content ++ "\n" ++ moreContent)) ]
+        ( Node Open (Paragraph moreContent), (Node Open (Paragraph content)) :: rest ) ->
+            Node Open (Paragraph <| content ++ "\n" ++ moreContent) :: rest
 
         {-
            setext headings
            ---------------
         -}
         -- combine a single-line paragraph with a setext heading
-        ( Just (Node Open (Paragraph content)), Node Open (Heading level _) ) ->
-            [ Node Open (Heading level (Just content)) ]
+        ( Node Open (Heading level _), (Node Open (Paragraph content)) :: rest ) ->
+            Node Open (Heading level (Just content)) :: rest
 
         -- convert a setext heading to a plain paragraph otherwise
-        ( _, Node Open (Heading level (Just content)) ) ->
-            [ Node Open (Paragraph content) ]
+        ( Node Open (Heading level (Just content)), rest ) ->
+            Node Open (Paragraph content) :: rest
 
         {-
            indented code blocks
            --------------------
         -}
         -- an indented code block following a paragraph is just a hanging indent
-        ( Just (Node Open (Paragraph content)), Node Open (IndentedCodeBlock notCode) ) ->
-            [ Node Open (Paragraph <| content ++ "\n" ++ notCode) ]
+        ( Node Open (IndentedCodeBlock notCode), (Node Open (Paragraph content)) :: rest ) ->
+            Node Open (Paragraph <| content ++ "\n" ++ notCode) :: rest
 
         -- add a new line onto an indented code block
-        ( Just (Node Open (IndentedCodeBlock code)), Node Open (IndentedCodeBlock moreCode) ) ->
-            [ Node Open (IndentedCodeBlock <| code ++ "\n" ++ moreCode) ]
+        ( Node Open (IndentedCodeBlock moreCode), (Node Open (IndentedCodeBlock code)) :: rest ) ->
+            Node Open (IndentedCodeBlock <| code ++ "\n" ++ moreCode) :: rest
 
         -- line breaks don't close indented blocks
-        ( Just (Node Open (IndentedCodeBlock code)), Node Closed (BlankLine _) ) ->
-            [ Node Open (IndentedCodeBlock <| code ++ "\n") ]
+        ( Node Closed (BlankLine _), (Node Open (IndentedCodeBlock code)) :: rest ) ->
+            Node Open (IndentedCodeBlock <| code ++ "\n") :: rest
 
         {-
            blank lines
            -----------
         -}
         -- blank lines breaks close everything else
-        ( Just (Node Open block), Node Closed (BlankLine _) ) ->
-            [ Node Closed block ]
+        ( Node Closed (BlankLine _), (Node Open block) :: rest ) ->
+            Node Closed block :: rest
 
         {-
            everything else
            ---------------
         -}
-        ( Just anythingElse, _ ) ->
-            [ new, anythingElse ]
-
-        ( Nothing, _ ) ->
-            [ new ]
-
-
-parseBlockStructure : List String -> Result Error (List Block)
-parseBlockStructure lines =
-    let
-        parseNextLine : ( Int, String ) -> Result Error (List Node) -> Result Error (List Node)
-        parseNextLine ( rowNumber, line ) progressOrError =
-            case Result.andThen (parseLine line) progressOrError of
-                Ok newDocument ->
-                    Ok newDocument
-
-                -- change the line number so we don't lose those in error messages
-                Err err ->
-                    Err { err | row = rowNumber }
-    in
-    lines
-        |> List.indexedMap (\rowNumber line -> ( rowNumber + 1, line ))
-        |> List.foldl parseNextLine (Ok [])
-        |> Result.map (List.map finalize)
-        |> Result.map List.reverse
+        ( new, rest ) ->
+            new :: rest
 
 
 parseLine : String -> List Node -> Result Error (List Node)
@@ -167,18 +144,29 @@ parseLine line document =
                 , blankLine
                 , succeed <| Node Open <| Paragraph <| String.trim line
                 ]
-
-        closeOrExtendHead : List Node -> Node -> List Node
-        closeOrExtendHead document node =
-            case document of
-                [] ->
-                    extend Nothing node
-
-                first :: rest ->
-                    extend (Just first) node ++ rest
     in
     run possibilities line
-        |> Result.map (closeOrExtendHead document)
+        |> Result.map (flip extend document)
+
+
+parseBlockStructure : List String -> Result Error (List Block)
+parseBlockStructure lines =
+    let
+        parseNextLine : ( Int, String ) -> Result Error (List Node) -> Result Error (List Node)
+        parseNextLine ( rowNumber, line ) progressOrError =
+            case Result.andThen (parseLine line) progressOrError of
+                Ok newDocument ->
+                    Ok newDocument
+
+                -- change the line number so we don't lose those in error messages
+                Err err ->
+                    Err { err | row = rowNumber }
+    in
+    lines
+        |> List.indexedMap (\rowNumber line -> ( rowNumber + 1, line ))
+        |> List.foldl parseNextLine (Ok [])
+        |> Result.map (List.map finalize)
+        |> Result.map List.reverse
 
 
 
