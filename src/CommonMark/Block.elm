@@ -40,11 +40,15 @@ type HeadingKind
     | Setext
 
 
+type CodeBlockKind
+    = Indented
+
+
 type Block
     = ThematicBreak
     | Heading HeadingKind Int (Maybe String)
     | Paragraph String
-    | IndentedCodeBlock String
+    | CodeBlock CodeBlockKind String
       -- wait, what? Why Does a blank line have a string attached? The answer:
       -- lines consisting only of whitespace.
     | BlankLine String
@@ -53,10 +57,10 @@ type Block
 finalize : Block -> Block
 finalize block =
     case block of
-        IndentedCodeBlock code ->
+        CodeBlock Indented code ->
             code
                 |> Regex.replace (Regex.AtMost 1) endsWithNewline (always "")
-                |> IndentedCodeBlock
+                |> CodeBlock Indented
 
         _ ->
             block
@@ -93,16 +97,16 @@ extend new existing =
            --------------------
         -}
         -- an indented code block following a paragraph is just a hanging indent
-        ( IndentedCodeBlock notCode, (Paragraph content) :: rest ) ->
+        ( CodeBlock Indented notCode, (Paragraph content) :: rest ) ->
             (Paragraph <| content ++ "\n" ++ notCode) :: rest
 
         -- add a new line onto an indented code block
-        ( IndentedCodeBlock moreCode, (IndentedCodeBlock code) :: rest ) ->
-            (IndentedCodeBlock <| code ++ "\n" ++ moreCode) :: rest
+        ( CodeBlock Indented moreCode, (CodeBlock Indented code) :: rest ) ->
+            (CodeBlock Indented <| code ++ "\n" ++ moreCode) :: rest
 
         -- line breaks don't close indented blocks
-        ( BlankLine _, (IndentedCodeBlock code) :: rest ) ->
-            (IndentedCodeBlock <| code ++ "\n") :: rest
+        ( BlankLine _, (CodeBlock Indented code) :: rest ) ->
+            (CodeBlock Indented <| code ++ "\n") :: rest
 
         -- ( _, (IndentedCodeBlock code) :: rest ) ->
         --     Debug.crash (toString ( toString new, existing ))
@@ -315,7 +319,7 @@ indentedCodeBlock : Parser Block
 indentedCodeBlock =
     inContext "in an indented code block" <|
         neverCommit <|
-            succeed IndentedCodeBlock
+            succeed (CodeBlock Indented)
                 |. ignore (Exactly 4) whitespace
                 |= keep oneOrMore (\_ -> True)
                 |. end

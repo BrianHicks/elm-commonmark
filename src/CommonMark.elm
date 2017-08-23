@@ -50,6 +50,7 @@ type Block
       -- TODO: should this carry over the atx/setext designation from the parsing stage?
     | Heading Int (Maybe Inline)
     | Paragraph Inline
+      -- TODO: should this carry over the indented/fenced designation from the parsing stage?
     | CodeBlock String
 
 
@@ -76,7 +77,7 @@ parseInlines =
                 CommonMark.Block.Paragraph contents ->
                     Paragraph (Plain contents) :: acc
 
-                CommonMark.Block.IndentedCodeBlock code ->
+                CommonMark.Block.CodeBlock _ code ->
                     CodeBlock code :: acc
 
                 CommonMark.Block.BlankLine _ ->
