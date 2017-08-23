@@ -2,7 +2,6 @@ module CommonMark.Block exposing (Block(..), parseBlockStructure)
 
 import Parser exposing (..)
 import Regex exposing (Regex)
-import String.Extra
 
 
 -- regexes
@@ -11,6 +10,25 @@ import String.Extra
 endsWithNewline : Regex
 endsWithNewline =
     Regex.regex "\\n$"
+
+
+unescape : Char -> String -> String
+unescape char =
+    let
+        regex =
+            char
+                |> String.fromChar
+                |> (++) "\\"
+                |> Regex.escape
+                |> Regex.regex
+
+        replacement =
+            String.fromChar char
+    in
+    Regex.replace
+        Regex.All
+        regex
+        (\_ -> replacement)
 
 
 
@@ -245,7 +263,7 @@ atxHeading =
             succeed
                 (String.concat
                     >> String.trim
-                    >> String.Extra.replace "\\#" "#"
+                    >> unescape '#'
                 )
                 |= (repeat zeroOrMore <|
                         oneOf

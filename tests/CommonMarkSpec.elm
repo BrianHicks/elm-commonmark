@@ -2,7 +2,7 @@ module CommonMarkSpec exposing (..)
 
 import CommonMark exposing (..)
 import Expect exposing (Expectation)
-import String.Extra exposing (replace)
+import Regex exposing (regex, replace)
 import Test exposing (..)
 
 
@@ -25,8 +25,8 @@ group description tester candidates =
 testName : String -> String
 testName raw =
     raw
-        |> replace " " "·"
-        |> replace "\n" "\\n"
+        |> replace Regex.All (regex " ") (\_ -> "·")
+        |> replace Regex.All (regex "\n") (\_ -> "\\n")
 
 
 example : Document -> String -> Test
