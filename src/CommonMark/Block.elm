@@ -50,7 +50,7 @@ type Block
     | Paragraph String
     | CodeBlock CodeBlockKind String
       -- wait, what? Why Does a blank line have a string attached? The answer:
-      -- lines consisting only of whitespace.
+      -- lines consisting only of isWhitespace.
     | BlankLine String
 
 
@@ -167,9 +167,57 @@ parseBlockStructure lines =
 -- parsers!
 
 
-whitespace : Char -> Bool
-whitespace c =
+isWhitespace : Char -> Bool
+isWhitespace c =
     c == ' ' || c == '\t'
+
+
+whitespaceExpandingTabs : Count -> Parser Int
+whitespaceExpandingTabs count =
+    let
+        check : Int -> Parser Int
+        check soFar =
+            case count of
+                AtLeast desired ->
+                    if soFar >= desired then
+                        succeed soFar
+                    else
+                        parseAndExpand soFar
+
+                Exactly desired ->
+                    if soFar == desired then
+                        succeed soFar
+                    else
+                        parseAndExpand soFar
+
+        tabstopSize =
+            4
+
+        {- Hitting space means "add one space", while hitting tab means "advance
+           to the next tabstop".
+
+           This means that:
+
+           | Input           | Output |
+           |=================|========|
+           | space           | 1      |
+           | space-space     | 2      |
+           | space-tab       | 4      |
+           | space-space-tab | 4      |
+           | space-tab-space | 5      |
+        -}
+        parseAndExpand : Int -> Parser Int
+        parseAndExpand start =
+            oneOf
+                [ ignore (Exactly 1) ((==) ' ')
+                    |> map (\_ -> start + 1)
+                    |> andThen check
+                , ignore (Exactly 1) ((==) '\t')
+                    |> map (\_ -> start + tabstopSize - start % tabstopSize)
+                    |> andThen check
+                ]
+    in
+    parseAndExpand 0
 
 
 oneToThreeSpaces : Parser ()
@@ -187,7 +235,7 @@ blankLine =
     inContext "a blank line" <|
         neverCommit
             (succeed BlankLine
-                |= keep zeroOrMore whitespace
+                |= keep zeroOrMore isWhitespace
                 |. end
             )
 
@@ -203,7 +251,7 @@ thematicBreak =
         single : Char -> Parser ()
         single breakChar =
             ignore (Exactly 1) ((==) breakChar)
-                |. ignore zeroOrMore whitespace
+                |. ignore zeroOrMore isWhitespace
 
         lineOf : Char -> Parser ()
         lineOf breakChar =
@@ -252,13 +300,13 @@ atxHeading =
                             [ -- closing hashes like in `## foo ##`
                               delayedCommit
                                 (ignore oneOrMore ((==) '#')
-                                    |. ignore zeroOrMore whitespace
+                                    |. ignore zeroOrMore isWhitespace
                                     |. end
                                 )
                                 (succeed "")
 
-                            -- normal non-whitespace non-closing header word characters
-                            , keep oneOrMore (not << whitespace)
+                            -- normal non-isWhitespace non-closing header word characters
+                            , keep oneOrMore (not << isWhitespace)
 
                             -- regular single spaces
                             , keep (Exactly 1) ((==) ' ')
@@ -273,7 +321,7 @@ atxHeading =
             )
             (oneOf
                 [ succeed identity
-                    |. ignore oneOrMore ((==) ' ')
+                    |. whitespaceExpandingTabs oneOrMore
                     |= words
                 , succeed ""
                 ]
@@ -309,7 +357,7 @@ setextHeading =
             (succeed identity
                 |. oneToThreeSpaces
                 |= level
-                |. ignore zeroOrMore whitespace
+                |. ignore zeroOrMore isWhitespace
                 |. end
             )
             (succeed Nothing)
@@ -320,6 +368,6 @@ indentedCodeBlock =
     inContext "in an indented code block" <|
         neverCommit <|
             succeed (CodeBlock Indented)
-                |. ignore (Exactly 4) whitespace
+                |. whitespaceExpandingTabs (Exactly 4)
                 |= keep oneOrMore (\_ -> True)
                 |. end
