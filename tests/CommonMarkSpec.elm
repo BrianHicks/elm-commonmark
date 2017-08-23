@@ -300,4 +300,24 @@ indentedCodeBlocks =
             , describe "any initial spaces beyond four will be included in the content, even in interior blank lines"
                 [ example [ CodeBlock "chunk1\n  \n  chunk2" ] "    chunk1\n      \n      chunk2" ]
             ]
+        , describe "an indented code block cannot interrupt a paragraph"
+            [ example [ plaintext "Foo\nbar" ] "Foo\n    bar" ]
+        , describe "any non-blank line with fewer than four leading spaces ends the code block immediately"
+            [ example [ CodeBlock "foo", plaintext "bar" ] "    foo\nbar" ]
+        , describe "indented code can occur immediately before and after other kinds of blocks"
+            [ example
+                [ Heading 1 (Just <| Plain "Heading")
+                , CodeBlock "foo"
+                , Heading 2 (Just <| Plain "Heading")
+                , CodeBlock "foo"
+                , ThematicBreak
+                ]
+                "# Heading\n    foo\nHeading\n------\n    foo\n----"
+            ]
+        , describe "the first line can be indented more than 4 spaces"
+            [ example [ CodeBlock "    foo\nbar" ] "        foo\n    bar" ]
+        , describe "blank lines before or after a code block are not included in it"
+            [ example [ CodeBlock "foo" ] "\n    \n    foo\n    " ]
+        , describe "trailing spaces are included in the content"
+            [ example [ CodeBlock "foo  " ] "    foo  " ]
         ]

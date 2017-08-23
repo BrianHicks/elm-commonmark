@@ -1,7 +1,17 @@
 module CommonMark.Block exposing (Block(..), parseBlockStructure)
 
 import Parser exposing (..)
+import Regex exposing (Regex)
 import String.Extra
+
+
+-- regexes
+
+
+endsWithNewline : Regex
+endsWithNewline =
+    Regex.regex "\\n$"
+
 
 
 -- blocks
@@ -28,7 +38,14 @@ type Node
 
 finalize : Node -> Block
 finalize (Node _ block) =
-    block
+    case block of
+        IndentedCodeBlock code ->
+            code
+                |> Regex.replace (Regex.AtMost 1) endsWithNewline (always "")
+                |> IndentedCodeBlock
+
+        _ ->
+            block
 
 
 {-| Combine an already-parsed and new node, and return the combination of the
