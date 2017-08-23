@@ -71,7 +71,7 @@ thematicBreak =
             , example [ ThematicBreak ] "   ***"
             ]
         , describe "four spaces is too many"
-            [ todo "    ***"
+            [ example [ CodeBlock "***" ] "    ***"
             , example [ plaintext "Foo\n***" ] "Foo\n    ***"
             ]
         , describe "more than three characters may be used"
@@ -137,7 +137,7 @@ atxHeading =
             , example [ Heading 1 (Just <| Plain "foo") ] "   # foo"
             ]
         , describe "four spaces are too much"
-            [ todo "    # foo"
+            [ example [ CodeBlock "# foo" ] "    # foo"
             , example [ plaintext "foo\n# bar" ] "foo\n    # bar"
             ]
         , describe "a closing sequence of # characters is optional"
@@ -209,8 +209,8 @@ setextHeading =
             , example [ Heading 2 (Just <| Plain "Foo") ] "  Foo\n-----"
             , example [ Heading 1 (Just <| Plain "Foo") ] "  Foo\n==="
             , describe "four spaces indent is too much"
-                [ todo "    Foo\n    ---"
-                , todo "    Foo\n---"
+                [ example [ CodeBlock "Foo\n---" ] "    Foo\n    ---"
+                , example [ CodeBlock "Foo", ThematicBreak ] "    Foo\n---"
                 ]
             ]
         , describe "heading underline can be indented up to three spaces, and may have trailing spaces"
@@ -225,10 +225,20 @@ setextHeading =
         , describe "trailing spaces in the content line do not cause a line break"
             [ example [ Heading 2 (Just <| Plain "Foo") ] "Foo  \n-----" ]
         , describe "a backslash in the content line do not cause a line break"
-            [ todo "Foo\\\n----" ]
+            [ example [ Heading 2 (Just <| Plain "Foo\\") ] "Foo\\\n----" ]
         , describe "these are setext headings (block > inline)"
-            [ todo "`Foo\n----\n`"
-            , todo "<a title=\"a lot\n---\nof dashes\"/>"
+            [ example
+                [ Heading 2 (Just <| Plain "`Foo")
+                , plaintext "`"
+                ]
+                "`Foo\n----\n`"
+
+            -- TODO: fix this up when I implement inlines
+            , example
+                [ Heading 2 (Just <| Plain "<a title=\"a lot")
+                , plaintext "of dashes\"/>"
+                ]
+                "<a title=\"a lot\n---\nof dashes\"/>"
             ]
         , describe "underline cannot be a lazy continuation line in a list item or block quote"
             [ todo "> Foo\n---"
@@ -240,7 +250,7 @@ setextHeading =
         , describe "content must be paragraphy"
             [ example [ ThematicBreak, ThematicBreak ] "---\n---"
             , todo "- foo\n-----"
-            , todo "    foo\n---"
+            , example [ CodeBlock "foo", ThematicBreak ] "    foo\n---"
             , todo "> foo\n-----"
             , example [ Heading 2 (Just <| Plain "\\> foo") ] "\\> foo\n------"
             ]
