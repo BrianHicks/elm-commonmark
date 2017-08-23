@@ -35,9 +35,14 @@ unescape char =
 -- blocks
 
 
+type HeadingKind
+    = ATX
+    | Setext
+
+
 type Block
     = ThematicBreak
-    | Heading Int (Maybe String)
+    | Heading HeadingKind Int (Maybe String)
     | Paragraph String
     | IndentedCodeBlock String
       -- wait, what? Why Does a blank line have a string attached? The answer:
@@ -45,17 +50,8 @@ type Block
     | BlankLine String
 
 
-type Status
-    = Open
-    | Closed
-
-
-type Node
-    = Node Status Block
-
-
-finalize : Node -> Block
-finalize (Node _ block) =
+finalize : Block -> Block
+finalize block =
     case block of
         IndentedCodeBlock code ->
             code
@@ -69,7 +65,7 @@ finalize (Node _ block) =
 {-| Combine an already-parsed and new node, and return the combination of the
 two (or if the node was closed, the new open node and the old closed one.)
 -}
-extend : Node -> List Node -> List Node
+extend : Block -> List Block -> List Block
 extend new existing =
     case ( new, existing ) of
         {-
@@ -77,45 +73,39 @@ extend new existing =
            ----------
         -}
         -- add a new line onto a paragraph
-        ( Node Open (Paragraph moreContent), (Node Open (Paragraph content)) :: rest ) ->
-            Node Open (Paragraph <| content ++ "\n" ++ moreContent) :: rest
+        ( Paragraph moreContent, (Paragraph content) :: rest ) ->
+            (Paragraph <| content ++ "\n" ++ moreContent) :: rest
 
         {-
            setext headings
            ---------------
         -}
         -- combine a single-line paragraph with a setext heading
-        ( Node Open (Heading level _), (Node Open (Paragraph content)) :: rest ) ->
-            Node Open (Heading level (Just content)) :: rest
+        ( Heading Setext level Nothing, (Paragraph content) :: rest ) ->
+            Heading Setext level (Just content) :: rest
 
         -- convert a setext heading to a plain paragraph otherwise
-        ( Node Open (Heading level (Just content)), rest ) ->
-            Node Open (Paragraph content) :: rest
+        ( Heading Setext level (Just content), rest ) ->
+            Paragraph content :: rest
 
         {-
            indented code blocks
            --------------------
         -}
         -- an indented code block following a paragraph is just a hanging indent
-        ( Node Open (IndentedCodeBlock notCode), (Node Open (Paragraph content)) :: rest ) ->
-            Node Open (Paragraph <| content ++ "\n" ++ notCode) :: rest
+        ( IndentedCodeBlock notCode, (Paragraph content) :: rest ) ->
+            (Paragraph <| content ++ "\n" ++ notCode) :: rest
 
         -- add a new line onto an indented code block
-        ( Node Open (IndentedCodeBlock moreCode), (Node Open (IndentedCodeBlock code)) :: rest ) ->
-            Node Open (IndentedCodeBlock <| code ++ "\n" ++ moreCode) :: rest
+        ( IndentedCodeBlock moreCode, (IndentedCodeBlock code) :: rest ) ->
+            (IndentedCodeBlock <| code ++ "\n" ++ moreCode) :: rest
 
         -- line breaks don't close indented blocks
-        ( Node Closed (BlankLine _), (Node Open (IndentedCodeBlock code)) :: rest ) ->
-            Node Open (IndentedCodeBlock <| code ++ "\n") :: rest
+        ( BlankLine _, (IndentedCodeBlock code) :: rest ) ->
+            (IndentedCodeBlock <| code ++ "\n") :: rest
 
-        {-
-           blank lines
-           -----------
-        -}
-        -- blank lines breaks close everything else
-        ( Node Closed (BlankLine _), (Node Open block) :: rest ) ->
-            Node Closed block :: rest
-
+        -- ( _, (IndentedCodeBlock code) :: rest ) ->
+        --     Debug.crash (toString ( toString new, existing ))
         {-
            everything else
            ---------------
@@ -124,14 +114,14 @@ extend new existing =
             new :: rest
 
 
-parseLine : String -> List Node -> Result Error (List Node)
+parseLine : String -> List Block -> Result Error (List Block)
 parseLine line document =
     let
-        possibilities : Parser Node
+        possibilities : Parser Block
         possibilities =
             oneOf
                 [ case List.head document of
-                    Just (Node Open (Paragraph _)) ->
+                    Just (Paragraph _) ->
                         setextHeading
 
                     _ ->
@@ -142,7 +132,7 @@ parseLine line document =
                 , thematicBreak
                 , indentedCodeBlock
                 , blankLine
-                , succeed <| Node Open <| Paragraph <| String.trim line
+                , succeed <| Paragraph <| String.trim line
                 ]
     in
     run possibilities line
@@ -152,7 +142,7 @@ parseLine line document =
 parseBlockStructure : List String -> Result Error (List Block)
 parseBlockStructure lines =
     let
-        parseNextLine : ( Int, String ) -> Result Error (List Node) -> Result Error (List Node)
+        parseNextLine : ( Int, String ) -> Result Error (List Block) -> Result Error (List Block)
         parseNextLine ( rowNumber, line ) progressOrError =
             case Result.andThen (parseLine line) progressOrError of
                 Ok newDocument ->
@@ -188,11 +178,11 @@ oneToThreeSpaces =
         ]
 
 
-blankLine : Parser Node
+blankLine : Parser Block
 blankLine =
     inContext "a blank line" <|
         neverCommit
-            (succeed (Node Closed << BlankLine)
+            (succeed BlankLine
                 |= keep zeroOrMore whitespace
                 |. end
             )
@@ -203,7 +193,7 @@ neverCommit parser =
     delayedCommitMap (\a _ -> a) parser (succeed ())
 
 
-thematicBreak : Parser Node
+thematicBreak : Parser Block
 thematicBreak =
     let
         single : Char -> Parser ()
@@ -216,7 +206,7 @@ thematicBreak =
             repeat (AtLeast 3) (single breakChar) |> map (always ())
     in
     inContext "thematic break" <|
-        succeed (Node Closed ThematicBreak)
+        succeed ThematicBreak
             |. neverCommit
                 (oneToThreeSpaces
                     |. oneOf
@@ -228,7 +218,7 @@ thematicBreak =
                 )
 
 
-atxHeading : Parser Node
+atxHeading : Parser Block
 atxHeading =
     let
         level : Parser Int
@@ -272,34 +262,33 @@ atxHeading =
                    )
     in
     inContext "in an ATX heading" <|
-        map (Node Closed) <|
-            delayedCommitMap Heading
-                (succeed identity
-                    |. oneToThreeSpaces
-                    |= level
-                )
-                (oneOf
-                    [ succeed identity
-                        |. ignore oneOrMore ((==) ' ')
-                        |= words
-                    , succeed ""
-                    ]
-                    |. end
-                    |> map
-                        (\stuff ->
-                            if stuff == "" then
-                                Nothing
-                            else
-                                Just stuff
-                        )
-                )
+        delayedCommitMap (Heading ATX)
+            (succeed identity
+                |. oneToThreeSpaces
+                |= level
+            )
+            (oneOf
+                [ succeed identity
+                    |. ignore oneOrMore ((==) ' ')
+                    |= words
+                , succeed ""
+                ]
+                |. end
+                |> map
+                    (\stuff ->
+                        if stuff == "" then
+                            Nothing
+                        else
+                            Just stuff
+                    )
+            )
 
 
 {-| since we're parsing line-by-line, setext headings just need to find the
 underline character, but produce a heading. So we use an empty Heading for that
 purpose.
 -}
-setextHeading : Parser Node
+setextHeading : Parser Block
 setextHeading =
     let
         level : Parser Int
@@ -312,22 +301,21 @@ setextHeading =
                 ]
     in
     inContext "in a potential setext heading" <|
-        map (Node Open) <|
-            delayedCommitMap Heading
-                (succeed identity
-                    |. oneToThreeSpaces
-                    |= level
-                    |. ignore zeroOrMore whitespace
-                    |. end
-                )
-                (succeed Nothing)
+        delayedCommitMap (Heading Setext)
+            (succeed identity
+                |. oneToThreeSpaces
+                |= level
+                |. ignore zeroOrMore whitespace
+                |. end
+            )
+            (succeed Nothing)
 
 
-indentedCodeBlock : Parser Node
+indentedCodeBlock : Parser Block
 indentedCodeBlock =
     inContext "in an indented code block" <|
         neverCommit <|
-            succeed (Node Open << IndentedCodeBlock)
+            succeed IndentedCodeBlock
                 |. ignore (Exactly 4) whitespace
                 |= keep oneOrMore (\_ -> True)
                 |. end

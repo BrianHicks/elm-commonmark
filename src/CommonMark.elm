@@ -47,6 +47,7 @@ or more block- or inline-level elements.
 -}
 type Block
     = ThematicBreak
+      -- TODO: should this carry over the atx/setext designation from the parsing stage?
     | Heading Int (Maybe Inline)
     | Paragraph Inline
     | CodeBlock String
@@ -69,7 +70,7 @@ parseInlines =
                 CommonMark.Block.ThematicBreak ->
                     ThematicBreak :: acc
 
-                CommonMark.Block.Heading level contents ->
+                CommonMark.Block.Heading _ level contents ->
                     Heading level (Maybe.map Plain contents) :: acc
 
                 CommonMark.Block.Paragraph contents ->
