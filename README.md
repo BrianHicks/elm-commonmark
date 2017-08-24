@@ -11,8 +11,8 @@ Woefully incomplete. Don't try to use this until it's published on [package](htt
 - [x] Thematic Breaks
 - [x] ATX Headings
 - [x] Setext headings
-- [ ] Indented code blocks
-- [ ] Fenced code blocks
+- [x] Indented code blocks
+- [x] Fenced code blocks
 - [ ] HTML blocks
 - [ ] Link reference definitions
 - [ ] Paragraphs
