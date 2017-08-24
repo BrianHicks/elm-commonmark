@@ -28,7 +28,7 @@ thematicBreak =
             , example [ ThematicBreak ] "   ***"
             ]
         , describe "four spaces is too many"
-            [ example [ CodeBlock "***" ] "    ***"
+            [ example [ CodeBlock Nothing "***" ] "    ***"
             , example [ plaintext "Foo\n***" ] "Foo\n    ***"
             ]
         , describe "more than three characters may be used"

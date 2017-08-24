@@ -33,8 +33,8 @@ setextHeading =
             , example [ Heading 2 (Just <| Plain "Foo") ] "  Foo\n-----"
             , example [ Heading 1 (Just <| Plain "Foo") ] "  Foo\n==="
             , describe "four spaces indent is too much"
-                [ example [ CodeBlock "Foo\n---" ] "    Foo\n    ---"
-                , example [ CodeBlock "Foo", ThematicBreak ] "    Foo\n---"
+                [ example [ CodeBlock Nothing "Foo\n---" ] "    Foo\n    ---"
+                , example [ CodeBlock Nothing "Foo", ThematicBreak ] "    Foo\n---"
                 ]
             ]
         , describe "heading underline can be indented up to three spaces, and may have trailing spaces"
@@ -74,7 +74,7 @@ setextHeading =
         , describe "content must be paragraphy"
             [ example [ ThematicBreak, ThematicBreak ] "---\n---"
             , todo "- foo\n-----"
-            , example [ CodeBlock "foo", ThematicBreak ] "    foo\n---"
+            , example [ CodeBlock Nothing "foo", ThematicBreak ] "    foo\n---"
             , todo "> foo\n-----"
             , example [ Heading 2 (Just <| Plain "\\> foo") ] "\\> foo\n------"
             ]

@@ -51,7 +51,7 @@ type Block
     | Heading Int (Maybe Inline)
     | Paragraph Inline
       -- TODO: should this carry over the indented/fenced designation from the parsing stage?
-    | CodeBlock String
+    | CodeBlock (Maybe String) String
 
 
 {-| Inline content, for example words in a paragraph or list item
@@ -77,10 +77,14 @@ parseInlines =
                 CommonMark.Block.Paragraph contents ->
                     Paragraph (Plain contents) :: acc
 
-                CommonMark.Block.CodeBlock _ code ->
-                    CodeBlock code :: acc
+                CommonMark.Block.CodeBlock (CommonMark.Block.Fenced _ _ _ _ info) code ->
+                    CodeBlock info (Maybe.withDefault "" code) :: acc
 
-                CommonMark.Block.BlankLine _ ->
+                CommonMark.Block.CodeBlock CommonMark.Block.Indented code ->
+                    CodeBlock Nothing (Maybe.withDefault "" code) :: acc
+
+                -- everything below this is implementation details of Block which we can safely ignore.
+                _ ->
                     acc
         )
         []

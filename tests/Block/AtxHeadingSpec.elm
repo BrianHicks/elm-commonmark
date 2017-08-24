@@ -38,7 +38,7 @@ atxHeading =
             , example [ Heading 1 (Just <| Plain "foo") ] "   # foo"
             ]
         , describe "four spaces are too much"
-            [ example [ CodeBlock "# foo" ] "    # foo"
+            [ example [ CodeBlock Nothing "# foo" ] "    # foo"
             , example [ plaintext "foo\n# bar" ] "foo\n    # bar"
             ]
         , describe "a closing sequence of # characters is optional"
